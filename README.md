@@ -1,6 +1,6 @@
 # Interactive Concert Seat Map
 
-Flutter / Dart / Material 3; Android. M1: setup and local data; M2: pure Dart math engine; M3: dark concert canvas renderer.
+Flutter / Dart / Material 3; Android. M1: setup and local data; M2: pure Dart math engine; M3: dark concert canvas renderer; M4: pan, pinch and selection.
 
 ## Run
 
@@ -18,7 +18,7 @@ flutter build apk --debug
 `lib/data/zone_section.dart`: block metadata, grid, color, shape and price.
 `lib/data/concert_mock_data.dart`: immutable lists, world 1600×1200, T-stage, aisles, 8 blocks. Codes are row-major: ST-L/R (20 each), VP-L/C/R (15/30/15), SD-L/C/R (30/40/30). Prices: Standing 1.800.000 đ, VIP 3.500.000 đ, Standard 1.200.000 đ. Status permutation produces exactly 124 available, 52 booked, 24 locked. Selected status belongs to later controller state.
 
-The app now displays the fitted 200-seat concert canvas. Gestures, selection behavior and filter controls are later milestones.
+The app displays the 200-seat concert canvas with bounded pan, pinch-to-zoom and persistent tap selection. Bottom sheet and filter controls are later milestones.
 
 ## Manual verification
 
@@ -79,3 +79,27 @@ Suggested commit: `feat: render dark concert canvas with cached geometry and LOD
 - 2026-11-24 — Added paint cache, single-canvas painter, fit-view screen and renderer tests; updated main entry, startup test, plan and README. Verified fit/zoom PNGs visually with SDK Roboto. Fixed preview export async handling and explicitly selected Roboto to avoid test placeholder glyphs. No dependencies added; no state/gesture controller implemented. Selected/filtered visual samples are test inputs, not preselected seats in the app.
 
 M3 verification: flutter analyze — 0 issues; flutter test — 25/25 passed; flutter build apk --debug — passed. Fit/zoom previews reviewed visually. Gradle native-access warning is non-fatal; 60fps profiling on device remains for gesture integration.
+
+## M4 gestures and selection
+
+`CameraController` owns camera and viewport. Initial dimensions call fit once; unchanged dimensions do nothing; changed dimensions preserve relative zoom/center via the M2 resize math. `ConcertMapScreen` coalesces layout measurements and applies them in a mounted post-frame callback, never mutating camera notifiers during build.
+
+`InteractiveSeatCanvas` handles one-finger pan and two-finger pinch through onScaleStart/Update/End only. The controller computes incremental zoom as current cumulative scale / previous cumulative scale. Finger count changes rebase focal point and scale, avoiding centroid jumps. Translation follows local focal movement; zoom and translation are clamped together. Resize cancels old gesture baselines. Taps use localPosition, convert screen to world and use exact M2 geometry. Drag/pinch suppresses selection.
+
+`ConcertMapController` stores ordered unique IDs in LinkedHashSet and emits immutable render snapshots from the state layer. Available taps toggle only that seat. Booked/locked seats show a Vietnamese snackbar without changing selection or source status. Controllers live for the screen lifetime, preserving selection on rebuild and rotation. The painter listens directly to camera/map controllers; pan and selection repaint the canvas without rebuilding the screen.
+
+### M4 manual verification
+
+1. Run `flutter run`. Tap two available seats: both become emerald with checkmarks; tap one again: only that seat restores its zone color.
+2. Tap booked/locked seats: feedback appears and existing selections stay intact.
+3. Pinch to zoom, drag, then tap a seat: the visible seat should toggle. Drag far beyond each edge and pinch to both limits: the map remains clamped.
+4. Add/remove a second finger while moving: the camera should not jump to a new focal origin. Finish dragging/pinching: no seat should be accidentally selected.
+5. Rotate while zoomed with seats selected: selection persists and camera adapts to the new viewport; normal rebuilds keep the same view.
+
+Suggested commit: `feat: add bounded map gestures and persistent seat selection (M4)`
+
+### AI Usage Log — M4
+
+- 2026-11-24 — Added CameraController, ConcertMapController, state-layer render snapshot, InteractiveSeatCanvas, controller and gesture widget tests; updated painter, screen, README and plan. Removed build-time camera reset; added post-frame dimension reconciliation, incremental pinch deltas and finger-count rebasing. Tests cover focal anchoring, clamps, local transformed taps, independent selection, blocked seats, same-size rebuilds and rotation persistence. Removed a redundant test import reported by analyzer. No third-party packages added; bottom sheet/filter/reset tools remain later milestones. Physical-device gesture feel and frame-rate profiling remain manual checks.
+
+M4 verification: flutter analyze — 0 issues; flutter test — 32/32 passed; flutter build apk --debug — passed. Rotation test confirms camera layout notifications run in postFrameCallbacks. Gradle native-access warning is non-fatal.

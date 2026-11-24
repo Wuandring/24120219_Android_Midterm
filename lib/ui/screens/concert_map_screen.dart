@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../data/concert_mock_data.dart';
-import '../../engine/camera_transform.dart';
-import '../../engine/viewport_clamper.dart';
+import '../../state/camera_controller.dart';
+import '../../state/concert_map_controller.dart';
+import '../canvas/interactive_seat_canvas.dart';
 import '../canvas/seat_map_paint_cache.dart';
-import '../canvas/seat_map_painter.dart';
 
 class ConcertMapScreen extends StatefulWidget {
   const ConcertMapScreen({super.key});
@@ -14,12 +13,31 @@ class ConcertMapScreen extends StatefulWidget {
 
 class _ConcertMapScreenState extends State<ConcertMapScreen> {
   late final SeatMapPaintCache _cache = SeatMapPaintCache();
-  final _camera = ValueNotifier(CameraTransform(scale: 1));
-  final _mapState = ValueNotifier(SeatMapRenderState());
+  final _camera = CameraController();
+  final _mapController = ConcertMapController();
+  Size? _pendingSize;
+  bool _viewportUpdateScheduled = false;
+
+  void _scheduleViewport(Size size) {
+    final current = _camera.viewport;
+    _pendingSize = size;
+    if (_viewportUpdateScheduled ||
+        (current?.viewportWidth == size.width &&
+            current?.viewportHeight == size.height))
+      return;
+    _viewportUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportUpdateScheduled = false;
+      if (!mounted) return;
+      final latest = _pendingSize!;
+      if (_camera.updateViewport(latest.width, latest.height)) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
     _camera.dispose();
-    _mapState.dispose();
+    _mapController.dispose();
     _cache.dispose();
     super.dispose();
   }
@@ -47,26 +65,14 @@ class _ConcertMapScreenState extends State<ConcertMapScreen> {
                   if (constraints.maxWidth <= 0 || constraints.maxHeight <= 0) {
                     return const SizedBox.shrink();
                   }
-                  final viewport = ViewportClamper(
-                    worldBounds: ConcertMockData.worldBounds,
-                    viewportWidth: constraints.maxWidth,
-                    viewportHeight: constraints.maxHeight,
+                  _scheduleViewport(
+                    Size(constraints.maxWidth, constraints.maxHeight),
                   );
-                  _camera.value = viewport.fit();
-                  return RepaintBoundary(
-                    child: Semantics(
-                      label: 'Sơ đồ concert: sân khấu chữ T, 40 Standing, 60 VIP và 100 Standard.',
-                      image: true,
-                      child: CustomPaint(
-                        size: Size.infinite,
-                        painter: SeatMapPainter(
-                          cache: _cache,
-                          camera: _camera,
-                          mapState: _mapState,
-                          fitScale: viewport.fitScale,
-                        ),
-                      ),
-                    ),
+                  if (_camera.viewport == null) return const SizedBox.expand();
+                  return InteractiveSeatCanvas(
+                    camera: _camera,
+                    mapController: _mapController,
+                    cache: _cache,
                   );
                 },
               ),

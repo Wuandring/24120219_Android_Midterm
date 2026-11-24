@@ -5,19 +5,8 @@ import '../../data/seat.dart';
 import '../../engine/camera_transform.dart';
 import '../../engine/coordinate_transformer.dart';
 import 'seat_map_paint_cache.dart';
-
-/// Immutable rendering snapshot; selection/filter behavior belongs to later milestones.
-class SeatMapRenderState {
-  SeatMapRenderState({
-    Set<String> selectedSeatIds = const {},
-    Set<String>? matchingSeatIds,
-  }) : selectedSeatIds = Set.unmodifiable(selectedSeatIds),
-       matchingSeatIds = matchingSeatIds == null
-           ? null
-           : Set.unmodifiable(matchingSeatIds);
-  final Set<String> selectedSeatIds;
-  final Set<String>? matchingSeatIds;
-}
+import '../../state/seat_map_render_state.dart';
+export '../../state/seat_map_render_state.dart';
 
 enum SeatVisualState { available, selected, booked, locked }
 
