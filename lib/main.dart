@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'data/concert_mock_data.dart';
+import 'ui/screens/concert_map_screen.dart';
 
 void main() => runApp(const ConcertApp());
 
@@ -22,22 +22,7 @@ class ConcertApp extends StatelessWidget {
           surface: const Color(0xFF1E293B),
         ),
       ),
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Sơ đồ chỗ concert')),
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Đã chuẩn bị ${ConcertMockData.seats.length} chỗ\n'
-                'Standing • VIP • Standard\n\n'
-                'M1 — Thiết lập và dữ liệu',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        ),
-      ),
+      home: const ConcertMapScreen(),
     );
   }
 }
