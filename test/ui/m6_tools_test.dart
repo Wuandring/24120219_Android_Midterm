@@ -58,11 +58,11 @@ void main() {
         expect(c.viewport, same(viewport));
         expect(c.value, camera);
         final origin = t.getTopLeft(key('seat-canvas-gestures'));
-        await t.tapAt(origin + const Offset(25, 25));
+        await t.tapAt(origin + const Offset(25, 200));
         await t.pumpAndSettle();
         expect(field.focusNode.hasFocus, isFalse);
         await t.showKeyboard(key('seat-search'));
-        await t.dragFrom(origin + const Offset(30, 30), const Offset(50, 0));
+        await t.dragFrom(origin + const Offset(30, 200), const Offset(50, 0));
         await t.pumpAndSettle();
         expect(field.focusNode.hasFocus, isFalse);
         expect(t.takeException(), isNull);
@@ -78,22 +78,22 @@ void main() {
       final map = canvas(t).mapController;
       BoxDecoration decoration(String name) =>
           t.widget<Container>(key(name)).decoration! as BoxDecoration;
-      expect(decoration('zone-filter-style').color, Colors.transparent);
-      expect(decoration('status-filter-style').color, Colors.transparent);
+      expect(decoration('zone-filter-style').color, const Color(0xFF141417));
+      expect(decoration('status-filter-style').color, const Color(0xFF141417));
       map.setZoneFilter(SeatZone.vip);
       await t.pump();
-      expect(decoration('zone-filter-style').color, const Color(0x2222D3EE));
-      expect(decoration('status-filter-style').color, Colors.transparent);
+      expect(decoration('zone-filter-style').color, const Color(0x22C9A96E));
+      expect(decoration('status-filter-style').color, const Color(0xFF141417));
       map.setStatusFilter(SeatFilterStatus.selected);
       await t.pump();
       expect(
         decoration('status-filter-style').border,
-        Border.all(color: const Color(0xFF22D3EE)),
+        Border.all(color: const Color(0xFFC9A96E), width: 0.7),
       );
       map.clearFilters();
       await t.pump();
-      expect(decoration('zone-filter-style').color, Colors.transparent);
-      expect(decoration('status-filter-style').color, Colors.transparent);
+      expect(decoration('zone-filter-style').color, const Color(0xFF141417));
+      expect(decoration('status-filter-style').color, const Color(0xFF141417));
       await close(t);
     },
   );

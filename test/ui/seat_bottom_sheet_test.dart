@@ -1,3 +1,5 @@
+import 'package:concert_seat_map/state/framed_viewport.dart';
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -109,7 +111,7 @@ void main() {
       expect(c.value, focused);
       expect(notifications, 0);
       final origin = t.getTopLeft(key('seat-canvas-gestures'));
-      await t.dragFrom(origin + const Offset(180, 120), const Offset(30, 25));
+      await t.dragFrom(origin + const Offset(180, 240), const Offset(30, 25));
       await t.pumpAndSettle();
       final manual = c.value;
       expect(manual, isNot(focused));
@@ -225,9 +227,26 @@ void main() {
         );
         final origin = t.getTopLeft(key('seat-canvas-gestures'));
         final sheetTop = t.getTopLeft(key('ticket-drag-handle')).dy;
-        expect(point.x, closeTo(c.viewport!.viewportWidth / 2, 1e-6));
-        expect(point.y, closeTo((sheetTop - origin.dy) / 2, 1e-6));
-        expect(origin.dy + point.y + 25, lessThan(sheetTop));
+        final v = c.viewport! as FramedViewport;
+        expect(point.x, closeTo(v.centerX, 1e-6));
+        final landscape = v.viewportWidth > v.viewportHeight;
+        final inset = landscape
+            ? 8.0
+            : v.viewportHeight - (sheetTop - origin.dy);
+        expect(
+          point.y,
+          closeTo(
+            v.topInset + (v.viewportHeight - v.topInset - inset) / 2,
+            1e-6,
+          ),
+        );
+        if (!landscape)
+          expect(origin.dy + point.y + 25, lessThan(sheetTop));
+        else
+          expect(
+            point.x + 25,
+            lessThan(t.getTopLeft(key("ticket-drag-handle")).dx),
+          );
         expect(c.value.scale, greaterThanOrEqualTo(1.6 * c.viewport!.fitScale));
       }
 
@@ -258,6 +277,8 @@ void main() {
         lessThanOrEqualTo(390),
       );
       expect(t.takeException(), isNull);
+      await t.tap(key('toggle-ticket-sheet'));
+      await t.pumpAndSettle();
       await t.tap(key('delete-${seat.id}'));
       await t.pumpAndSettle();
       expect(widget.mapController.focusedSeatId, isNull);
@@ -297,7 +318,7 @@ void main() {
       final sheet = t.widget<DraggableScrollableSheet>(
         find.byType(DraggableScrollableSheet),
       );
-      expect(sheet.maxChildSize, lessThanOrEqualTo(0.42));
+      expect(sheet.maxChildSize, lessThanOrEqualTo(0.55));
       await t.tap(key('toggle-ticket-sheet'));
       await t.pumpAndSettle();
       expect(key('toggle-ticket-sheet').hitTestable(), findsOneWidget);

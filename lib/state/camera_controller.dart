@@ -8,6 +8,7 @@ import 'dart:math' as math;
 
 import '../engine/camera_transform.dart';
 import '../engine/viewport_clamper.dart';
+import 'framed_viewport.dart';
 
 class CameraController extends ValueNotifier<CameraTransform> {
   CameraController() : super(CameraTransform(scale: 1));
@@ -18,20 +19,30 @@ class CameraController extends ValueNotifier<CameraTransform> {
   int _pointerCount = 0;
 
   /// Call outside build. The initial fit occurs only once.
-  bool updateViewport(double width, double height) {
+  bool updateViewport(
+    double width,
+    double height, {
+    double topInset = 0,
+    double bottomInset = 0,
+    double rightInset = 0,
+  }) {
     if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0)
       return false;
     final previous = _viewport;
-    if (previous?.viewportWidth == width && previous?.viewportHeight == height)
+    if (previous is FramedViewport &&
+        previous.viewportWidth == width &&
+        previous.viewportHeight == height &&
+        previous.topInset == topInset &&
+        previous.bottomInset == bottomInset &&
+        previous.rightInset == rightInset)
       return false;
-    final next = ViewportClamper(
+    final next = FramedViewport(
       worldBounds: ConcertMockData.worldBounds,
       viewportWidth: width,
       viewportHeight: height,
-      edgePaddingX: width / 2,
-      // Fixed clearance supports the sheet's largest supported extent without
-      // changing bounds during sheet drags; part of the venue stays onscreen.
-      edgePaddingY: height * 0.8,
+      topInset: topInset,
+      bottomInset: bottomInset,
+      rightInset: rightInset,
     );
     _viewport = next;
     endGesture();
@@ -44,7 +55,8 @@ class CameraController extends ValueNotifier<CameraTransform> {
     if (!bottomInset.isFinite || bottomInset < 0) {
       throw ArgumentError.value(bottomInset, 'bottomInset');
     }
-    final visibleHeight = (v.viewportHeight - bottomInset).clamp(
+    final topInset = v is FramedViewport ? v.topInset : 0.0;
+    final visibleHeight = (v.viewportHeight - topInset - bottomInset).clamp(
       0.0,
       v.viewportHeight,
     );
@@ -55,8 +67,10 @@ class CameraController extends ValueNotifier<CameraTransform> {
     return v.clamp(
       CameraTransform(
         scale: scale,
-        tx: v.viewportWidth / 2 - seat.bounds.centerX * scale,
-        ty: visibleHeight / 2 - seat.bounds.centerY * scale,
+        tx:
+            (v is FramedViewport ? v.centerX : v.viewportWidth / 2) -
+            seat.bounds.centerX * scale,
+        ty: topInset + visibleHeight / 2 - seat.bounds.centerY * scale,
       ),
     );
   }
@@ -65,6 +79,17 @@ class CameraController extends ValueNotifier<CameraTransform> {
     _lastFocalPoint = focalPoint;
     _lastScale = 1;
     _pointerCount = pointerCount;
+  }
+
+  CameraTransform zoomTarget(double factor, Offset focalPoint) {
+    final viewport = _viewport;
+    if (viewport == null) return value;
+    return viewport.zoom(
+      value,
+      scaleDelta: factor,
+      focalX: focalPoint.dx,
+      focalY: focalPoint.dy,
+    );
   }
 
   void updateGesture({
@@ -88,7 +113,11 @@ class CameraController extends ValueNotifier<CameraTransform> {
       return;
     }
     final delta = focalPoint - previousFocal;
-    final scaleDelta = pointerCount > 1 ? scale / _lastScale : 1.0;
+    // Emulator/trackpad recognizers can report scaling with pointerCount == 1.
+    // A normal pan has scale == lastScale == 1; returning a pinch to 1 must
+    // also undo the previous scale increment rather than leaving zoom stuck.
+    final ratio = _lastScale > 0 ? scale / _lastScale : 1.0;
+    final scaleDelta = ratio.isFinite && ratio > 0 ? ratio : 1.0;
     // Translate the old focal point to the new one, then zoom about the new
     // focal point. Clamp once so intermediate edge clamps do not add drift.
     value = viewport.zoom(

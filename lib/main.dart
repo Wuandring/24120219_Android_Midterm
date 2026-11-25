@@ -15,11 +15,11 @@ class ConcertApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B1120),
+        scaffoldBackgroundColor: const Color(0xFF0D0D0F),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF06B6D4),
+          seedColor: const Color(0xFFC9A96E),
           brightness: Brightness.dark,
-          surface: const Color(0xFF1E293B),
+          surface: const Color(0xFF141417),
         ),
       ),
       home: const ConcertMapScreen(),

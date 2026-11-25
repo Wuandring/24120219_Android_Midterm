@@ -1,9 +1,42 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
+
+import 'dart:ui' as ui;
 
 import '../../data/concert_mock_data.dart';
 import '../../data/seat.dart';
+import '../concert_palette.dart';
+
+class SeatInk {
+  SeatInk(Color zone, int state, bool dim) {
+    final alpha = dim ? (state == 1 ? 0.45 : 0.15) : 1.0;
+    final color = [
+      zone,
+      ConcertPalette.selected,
+      const Color(0xFF222228),
+      const Color(0xFF4A181D),
+    ][state];
+    fill = Paint()..color = color.withValues(alpha: alpha);
+    border = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = state == 1 ? 1.8 : 1
+      ..color = (state == 1 ? Colors.white : const Color(0xFF7F1D1D))
+          .withValues(alpha: alpha);
+    symbol = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = [
+        Colors.transparent,
+        const Color(0xFF111114),
+        const Color(0xFF52525B),
+        const Color(0xFFF87171),
+      ][state].withValues(alpha: alpha);
+    backrest = Paint()
+      ..color = const Color(0xFF111114).withValues(alpha: alpha * 0.28);
+  }
+  late final Paint fill, border, symbol, backrest;
+}
 
 class SeatPaintGeometry {
   SeatPaintGeometry(this.seat) {
@@ -38,18 +71,23 @@ class SeatPaintGeometry {
     }
     dashed = Path();
     for (final metric in outline.computeMetrics()) {
-      for (double distance = 0; distance < metric.length; distance += 10) {
-        dashed.addPath(metric.extractPath(distance, distance + 6), Offset.zero);
+      for (double d = 0; d < metric.length; d += 10) {
+        dashed.addPath(metric.extractPath(d, d + 6), Offset.zero);
       }
     }
     code = SeatMapPaintCache.text(
       seat.id,
-      9.0,
-      const Color(0xFFE2E8F0),
+      9,
+      ConcertPalette.muted,
       letterSpacing: 0,
     );
     codePosition = Offset(center.dx - code.width / 2, rect.bottom + 3);
     cullBounds = rect.inflate(20);
+    inks = List.generate(
+      8,
+      (i) => SeatInk(ConcertPalette.zone(seat.zone), i % 4, i >= 4),
+      growable: false,
+    );
   }
   final Seat seat;
   late final Rect rect, cullBounds;
@@ -58,62 +96,189 @@ class SeatPaintGeometry {
   late final double radius;
   late final Path check, slash, cross, dashed;
   late final TextPainter code;
+  late final List<SeatInk> inks;
 }
 
 class MapLabel {
-  MapLabel(String label, double x, double y, double size, Color color)
-    : painter = SeatMapPaintCache.text(label, size, color) {
+  MapLabel(
+    String label,
+    double x,
+    double y,
+    double size,
+    Color color, {
+    double spacing = 2,
+    this.readableSection = false,
+    FontWeight weight = FontWeight.w600,
+  }) : painter = SeatMapPaintCache.text(
+         label,
+         size,
+         color,
+         letterSpacing: spacing,
+         weight: weight,
+       ) {
     position = Offset(x - painter.width / 2, y - painter.height / 2);
+    anchor = Offset(x, y);
+    centeredPosition = Offset(-painter.width / 2, -painter.height / 2);
   }
   final TextPainter painter;
   late final Offset position;
+  late final Offset anchor, centeredPosition;
+  final bool readableSection;
 }
 
-/// Owns painting resources for one map. No Paint/TextPainter creation per frame.
+class StardustDot {
+  StardustDot(int i)
+    : position = Offset(
+        i.isEven ? 40.0 + (i * 17 % 45) : 1515.0 + (i * 17 % 45),
+        220.0 + (i * 127 % 920),
+      ),
+      radius = 0.7 + (i % 3) * 0.25,
+      paint = (Paint()
+        ..color = const Color(0xFFD4B475)
+            .withValues(alpha: 0.12 + (i % 11) * 0.02));
+  final Offset position;
+  final double radius;
+  final Paint paint;
+}
+
+/// All render geometry, typography and state variants are prepared here.
 class SeatMapPaintCache {
   SeatMapPaintCache() {
     seats = List.unmodifiable(ConcertMockData.seats.map(SeatPaintGeometry.new));
-    for (final section in ConcertMockData.sections) {
-      zoneColors[section.id] = Color(section.colorArgb);
+    for (final s in ConcertMockData.sections) {
+      final pad = chamfer(
+        Rect.fromLTRB(
+          s.bounds.left - 12,
+          s.bounds.top - 36,
+          s.bounds.right + 12,
+          s.bounds.bottom + 12,
+        ),
+        12,
+      );
+      pads.add(pad);
+      final depth = s.zone == SeatZone.vip
+          ? 5.0
+          : s.zone == SeatZone.standard
+          ? 7.0
+          : 0.0;
+      if (depth > 0) {
+        deckShadows.add(pad.shift(Offset(0, depth + 3)));
+        deckLips.add(
+          Path.combine(
+            PathOperation.difference,
+            pad.shift(Offset(0, depth)),
+            pad,
+          ),
+        );
+      }
+      if (s.zone == SeatZone.standard) {
+        for (var row = 1; row < s.rows; row++) {
+          final y = s.bounds.top + row * s.bounds.height / s.rows;
+          tierSteps
+            ..moveTo(s.bounds.left + 8, y)
+            ..lineTo(s.bounds.right - 8, y);
+        }
+      }
       labels.add(
         MapLabel(
-          '${section.label} ${section.id.split('-').last}',
-          section.bounds.centerX,
-          section.bounds.top - 20,
-          22,
-          Color(section.colorArgb),
+          '${s.label} ${s.id.split('-').last}',
+          s.bounds.centerX,
+          s.bounds.top - 20,
+          19,
+          const Color(0xFFD6D1C4),
+          readableSection: true,
+          weight: FontWeight.w700,
         ),
       );
     }
-    labels.addAll([
-      MapLabel('MAIN STAGE', 800, 140, 28, const Color(0xFFF8FAFC)),
-      MapLabel('CATWALK', 800, 370, 15, const Color(0xFF67E8F9)),
-    ]);
-    stage = Path()
-      ..moveTo(400, 70)
-      ..lineTo(1200, 70)
-      ..lineTo(1200, 210)
-      ..lineTo(860, 210)
-      ..lineTo(860, 520)
-      ..lineTo(740, 520)
-      ..lineTo(740, 210)
-      ..lineTo(400, 210)
+    mainStage = Path()
+      ..moveTo(430, 70)
+      ..lineTo(1170, 70)
+      ..lineTo(1200, 140)
+      ..lineTo(1170, 210)
+      ..lineTo(430, 210)
+      ..lineTo(400, 140)
       ..close();
-    glow.shader = ui.Gradient.radial(const Offset(800, 290), 580, [
-      const Color(0x4406B6D4),
-      const Color(0x0006B6D4),
+    catwalk = Path()..addRect(const Rect.fromLTRB(776, 210, 824, 395));
+    bStage = Path()
+      ..moveTo(750, 395)
+      ..lineTo(850, 395)
+      ..lineTo(882, 430)
+      ..lineTo(870, 500)
+      ..lineTo(855, 512)
+      ..lineTo(745, 512)
+      ..lineTo(730, 500)
+      ..lineTo(718, 430)
+      ..close();
+    foh = chamfer(const Rect.fromLTWH(745, 782, 110, 36), 8);
+    innerBStage = Path()
+      ..moveTo(752, 407)
+      ..lineTo(848, 407)
+      ..lineTo(868, 434)
+      ..lineTo(858, 492)
+      ..lineTo(850, 500)
+      ..lineTo(750, 500)
+      ..lineTo(742, 492)
+      ..lineTo(732, 434)
+      ..close();
+    bevel = Path()
+      ..moveTo(430, 70)
+      ..lineTo(1170, 70)
+      ..lineTo(1182, 84)
+      ..lineTo(418, 84)
+      ..close();
+    labels.addAll([
+      MapLabel('SÂN KHẤU', 800, 140, 26, Colors.white),
+      MapLabel('B-STAGE', 800, 453, 14, Colors.white, spacing: 1),
+      MapLabel('FOH', 800, 800, 14, Colors.white),
     ]);
-    aisles = List.unmodifiable(
-      ConcertMockData.aisles.map(
-        (b) => Rect.fromLTWH(b.left, b.top, b.width, b.height),
-      ),
+    for (final path in [mainStage, catwalk, bStage, foh]) {
+      stageShadows.add(path.shift(const Offset(0, 11)));
+      stageExtrusions.add(
+        Path.combine(
+          PathOperation.difference,
+          path.shift(const Offset(0, 8)),
+          path,
+        ),
+      );
+    }
+    leftCone = Path()
+      ..moveTo(640, 205)
+      ..lineTo(350, 530)
+      ..lineTo(710, 530)
+      ..close();
+    rightCone = Path()
+      ..moveTo(960, 205)
+      ..lineTo(890, 530)
+      ..lineTo(1250, 530)
+      ..close();
+    leftLight.shader = ui.Gradient.linear(
+      const Offset(640, 205),
+      const Offset(530, 530),
+      [const Color(0x0DE5C67E), const Color(0x00E5C67E)],
+    );
+    rightLight.shader = ui.Gradient.linear(
+      const Offset(960, 205),
+      const Offset(1070, 530),
+      [const Color(0x0DE5C67E), const Color(0x00E5C67E)],
     );
   }
+  static Path chamfer(Rect r, double c) => Path()
+    ..moveTo(r.left + c, r.top)
+    ..lineTo(r.right - c, r.top)
+    ..lineTo(r.right, r.top + c)
+    ..lineTo(r.right, r.bottom - c)
+    ..lineTo(r.right - c, r.bottom)
+    ..lineTo(r.left + c, r.bottom)
+    ..lineTo(r.left, r.bottom - c)
+    ..lineTo(r.left, r.top + c)
+    ..close();
   static TextPainter text(
     String value,
     double size,
     Color color, {
-    double letterSpacing = 1.8,
+    double letterSpacing = 2,
+    FontWeight weight = FontWeight.w600,
   }) => TextPainter(
     text: TextSpan(
       text: value,
@@ -121,59 +286,62 @@ class SeatMapPaintCache {
         fontFamily: 'Roboto',
         fontSize: size,
         color: color,
-        fontWeight: FontWeight.w600,
+        fontWeight: weight,
         letterSpacing: letterSpacing,
       ),
     ),
     textDirection: TextDirection.ltr,
   )..layout();
-
   late final List<SeatPaintGeometry> seats;
-  late final List<Rect> aisles;
+  late final Path mainStage, catwalk, bStage, foh, innerBStage, bevel;
+  final pads = <Path>[];
+  final deckShadows = <Path>[], deckLips = <Path>[];
+  final stageShadows = <Path>[], stageExtrusions = <Path>[];
+  final tierSteps = Path();
+  late final Path leftCone, rightCone;
+  final leftLight = Paint(), rightLight = Paint();
+  final groundShadow = Paint()..color = const Color(0xFF050507);
+  final extrusion = Paint()..color = const Color(0xFF2A2D34);
+  final stepPaint = Paint()
+    ..color = const Color(0x442A2D34)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.8;
   final labels = <MapLabel>[];
-  final zoneColors = <String, Color>{};
-  late final Path stage;
-  final arena = RRect.fromRectAndRadius(
-    const Rect.fromLTWH(35, 25, 1530, 1160),
-    const Radius.circular(100),
-  );
-  final glowRect = const Rect.fromLTWH(180, 0, 1240, 840);
-  final glow = Paint();
-  final background = Paint()..color = const Color(0xFF0B1120);
-  final aisle = Paint()..color = const Color(0xFF090F1C);
-  final stageFill = Paint()..color = const Color(0xFF1E293B);
+  final stardust = List.generate(65, StardustDot.new, growable: false);
+  final background = Paint()..color = ConcertPalette.background;
+  final padFill = Paint()..color = const Color(0xFF151519);
+  final padBorder = Paint()
+    ..color = const Color(0xFF27272E)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final stageFill = Paint()..color = const Color(0xFF5C606B);
   final stageBorder = Paint()
-    ..color = const Color(0xFF67E8F9)
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 2;
-  final contour = Paint()
-    ..color = const Color(0xFF263449)
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 2;
-  final fill = Paint();
-  final border = Paint()
+    ..color = const Color(0xFF9CA3AF)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.5;
-  final symbol = Paint()
+  final bevelFill = Paint()..color = const Color(0xFF7A808E);
+  final innerBorder = Paint()
+    ..color = const Color(0xFF7A808E)
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 2.5
-    ..strokeCap = StrokeCap.round
-    ..strokeJoin = StrokeJoin.round;
-  final accent = Paint();
+    ..strokeWidth = 1;
+  final dashedBorder = Paint()
+    ..color = const Color(0x73F4D078)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
   final spotlightGlow = Paint()
-    ..color = const Color(0x5534D399)
+    ..color = const Color(0x44F4D078)
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 9;
+    ..strokeWidth = 7;
   final spotlightRing = Paint()
-    ..color = const Color(0xFFE6FFF5)
+    ..color = const Color(0xFFF4D078)
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 2.5;
+    ..strokeWidth = 2;
   void dispose() {
-    for (final seat in seats) {
-      seat.code.dispose();
+    for (final s in seats) {
+      s.code.dispose();
     }
-    for (final label in labels) {
-      label.painter.dispose();
+    for (final l in labels) {
+      l.painter.dispose();
     }
   }
 }

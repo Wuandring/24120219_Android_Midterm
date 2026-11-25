@@ -1,13 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../data/seat.dart';
 import '../../engine/camera_transform.dart';
-import '../../engine/coordinate_transformer.dart';
-import 'seat_map_paint_cache.dart';
 import '../../state/seat_map_render_state.dart';
+import 'seat_map_paint_cache.dart';
 export '../../state/seat_map_render_state.dart';
 
 enum SeatVisualState { available, selected, booked, locked }
@@ -25,14 +25,12 @@ class SeatMapPainter extends CustomPainter {
   final ValueListenable<SeatMapRenderState> mapState;
   final double fitScale;
   final Animation<double> spotlight;
-  int lastPaintedSeatCount = 0;
-  int lastPaintedCodeCount = 0;
-
+  int lastPaintedSeatCount = 0, lastPaintedCodeCount = 0;
   bool get showSeatCodes => camera.value.scale >= 1.35 * fitScale;
-  SeatVisualState visualState(Seat seat) {
-    if (seat.status == SeatStatus.booked) return SeatVisualState.booked;
-    if (seat.status == SeatStatus.locked) return SeatVisualState.locked;
-    return mapState.value.selectedSeatIds.contains(seat.id)
+  SeatVisualState visualState(Seat s) {
+    if (s.status == SeatStatus.booked) return SeatVisualState.booked;
+    if (s.status == SeatStatus.locked) return SeatVisualState.locked;
+    return mapState.value.selectedSeatIds.contains(s.id)
         ? SeatVisualState.selected
         : SeatVisualState.available;
   }
@@ -42,99 +40,108 @@ class SeatMapPainter extends CustomPainter {
     lastPaintedSeatCount = 0;
     lastPaintedCodeCount = 0;
     if (size.isEmpty) return;
-    canvas.drawRect(Offset.zero & size, cache.background);
+    canvas.drawPaint(cache.background);
     canvas.save();
-    canvas.clipRect(Offset.zero & size);
     final c = camera.value;
     canvas.translate(c.tx, c.ty);
     canvas.scale(c.scale);
-    canvas.drawRRect(cache.arena, cache.contour);
-    canvas.drawRect(cache.glowRect, cache.glow);
-    for (final aisle in cache.aisles) {
-      canvas.drawRect(aisle, cache.aisle);
+    for (var i = 0; i < cache.stardust.length; i++) {
+      final dot = cache.stardust[i];
+      canvas.drawCircle(dot.position, dot.radius, dot.paint);
     }
-    canvas.drawPath(cache.stage, cache.stageFill);
-    canvas.drawPath(cache.stage, cache.stageBorder);
-    for (final label in cache.labels) {
-      label.painter.paint(canvas, label.position);
+    for (var i = 0; i < cache.pads.length; i++) {
+      final pad = cache.pads[i];
+      // Deck shadows/lips are cached, and drawn before the deck tops.
+      if (i == 0) {
+        for (var j = 0; j < cache.deckShadows.length; j++) {
+          canvas.drawPath(cache.deckShadows[j], cache.groundShadow);
+          canvas.drawPath(cache.deckLips[j], cache.extrusion);
+        }
+      }
+      canvas.drawPath(pad, cache.padFill);
+      canvas.drawPath(pad, cache.padBorder);
     }
-    final visible = CoordinateTransformer.visibleWorldRect(
-      c,
-      viewportWidth: size.width,
-      viewportHeight: size.height,
-    );
-    final visibleRect = Rect.fromLTWH(
-      visible.left,
-      visible.top,
-      visible.width,
-      visible.height,
-    );
+    canvas.drawPath(cache.tierSteps, cache.stepPaint);
+    canvas.drawPath(cache.leftCone, cache.leftLight);
+    canvas.drawPath(cache.rightCone, cache.rightLight);
+    for (var i = 0; i < cache.stageShadows.length; i++) {
+      canvas.drawPath(cache.stageShadows[i], cache.groundShadow);
+      canvas.drawPath(cache.stageExtrusions[i], cache.extrusion);
+    }
+    canvas.drawPath(cache.mainStage, cache.stageFill);
+    canvas.drawPath(cache.mainStage, cache.stageBorder);
+    canvas.drawPath(cache.catwalk, cache.stageFill);
+    canvas.drawPath(cache.catwalk, cache.stageBorder);
+    canvas.drawPath(cache.bStage, cache.stageFill);
+    canvas.drawPath(cache.bStage, cache.stageBorder);
+    canvas.drawPath(cache.innerBStage, cache.innerBorder);
+    canvas.drawPath(cache.bevel, cache.bevelFill);
+    canvas.drawPath(cache.foh, cache.stageFill);
+    canvas.drawPath(cache.foh, cache.stageBorder);
+    for (var i = 0; i < cache.labels.length; i++) {
+      final l = cache.labels[i];
+      if (l.readableSection) {
+        // Preserve anchored 2D geometry; only text gets a legibility floor.
+        canvas.save();
+        canvas.translate(l.anchor.dx, l.anchor.dy);
+        canvas.scale(math.max(1.0, 0.45 / c.scale));
+        l.painter.paint(canvas, l.centeredPosition);
+        canvas.restore();
+      } else {
+        l.painter.paint(canvas, l.position);
+      }
+    }
+    // Scalar culling avoids creating inverse-transform Rect/point objects per frame.
+    final left = -c.tx / c.scale, top = -c.ty / c.scale;
+    final right = (size.width - c.tx) / c.scale,
+        bottom = (size.height - c.ty) / c.scale;
     final state = mapState.value;
     final codes = showSeatCodes;
-    for (final geometry in cache.seats) {
-      if (!geometry.cullBounds.overlaps(visibleRect)) continue;
+    for (var i = 0; i < cache.seats.length; i++) {
+      final g = cache.seats[i];
+      final b = g.cullBounds;
+      if (b.right <= left ||
+          b.left >= right ||
+          b.bottom <= top ||
+          b.top >= bottom)
+        continue;
       lastPaintedSeatCount++;
-      final seat = geometry.seat;
-      final visual = visualState(seat);
-      final matches = state.matchingSeatIds?.contains(seat.id) ?? true;
-      final selected = visual == SeatVisualState.selected;
-      final opacity = matches
-          ? 1.0
-          : selected
-          ? 0.40
-          : 0.15;
-      final color = switch (visual) {
-        SeatVisualState.available => cache.zoneColors[seat.sectionId]!,
-        SeatVisualState.selected => const Color(0xFF10B981),
-        SeatVisualState.booked => const Color(0xFF334155),
-        SeatVisualState.locked => const Color(0xFF450A0A),
-      };
-      cache.fill.color = color.withValues(alpha: opacity);
-      cache.border.color =
-          (selected
-                  ? Colors.white
-                  : visual == SeatVisualState.locked
-                  ? const Color(0xFFB45353)
-                  : const Color(0xFFCBD5E1))
-              .withValues(alpha: opacity * (selected ? 1 : 0.55));
-      cache.symbol.color =
-          (visual == SeatVisualState.locked
-                  ? const Color(0xFFF87171)
-                  : const Color(0xFFF8FAFC))
-              .withValues(alpha: opacity * (selected ? 1 : 0.75));
-      if (seat.shape == SeatShape.circle) {
-        canvas.drawCircle(geometry.center, geometry.radius, cache.fill);
-        canvas.drawCircle(geometry.center, geometry.radius, cache.border);
+      final visual = visualState(g.seat);
+      final matches = state.matchingSeatIds?.contains(g.seat.id) ?? true;
+      final ink = g.inks[visual.index + (matches ? 0 : 4)];
+      if (g.seat.shape == SeatShape.circle) {
+        canvas.drawCircle(g.center, g.radius, ink.fill);
+        if (visual == SeatVisualState.selected ||
+            visual == SeatVisualState.locked)
+          canvas.drawCircle(g.center, g.radius, ink.border);
       } else {
-        canvas.drawRRect(geometry.rounded, cache.fill);
-        canvas.drawRRect(geometry.rounded, cache.border);
+        canvas.drawRRect(g.rounded, ink.fill);
+        if (visual == SeatVisualState.selected ||
+            visual == SeatVisualState.locked)
+          canvas.drawRRect(g.rounded, ink.border);
       }
-      if (seat.shape == SeatShape.roundedRectangle) {
-        cache.accent.color = Colors.white.withValues(alpha: 0.4 * opacity);
-        canvas.drawRRect(geometry.backrest, cache.accent);
-      }
+      if (g.seat.shape == SeatShape.roundedRectangle)
+        canvas.drawRRect(g.backrest, ink.backrest);
       switch (visual) {
         case SeatVisualState.selected:
-          canvas.drawPath(geometry.check, cache.symbol);
+          canvas.drawPath(g.check, ink.symbol);
         case SeatVisualState.booked:
-          canvas.drawPath(geometry.slash, cache.symbol);
+          canvas.drawPath(g.slash, ink.symbol);
         case SeatVisualState.locked:
-          canvas.drawPath(geometry.cross, cache.symbol);
+          canvas.drawPath(g.cross, ink.symbol);
         case SeatVisualState.available:
           break;
       }
-      if (!matches && selected) {
-        cache.border.color = const Color(0xFF10B981).withValues(alpha: 0.4);
-        canvas.drawPath(geometry.dashed, cache.border);
-      }
-      if (state.focusedSeatId == seat.id) {
+      if (!matches && visual == SeatVisualState.selected)
+        canvas.drawPath(g.dashed, cache.dashedBorder);
+      if (state.focusedSeatId == g.seat.id) {
         final radius =
-            geometry.radius + 9 + 3 * math.sin(spotlight.value * math.pi * 6);
-        canvas.drawCircle(geometry.center, radius, cache.spotlightGlow);
-        canvas.drawCircle(geometry.center, radius, cache.spotlightRing);
+            g.radius + 9 + 3 * math.sin(spotlight.value * math.pi * 6);
+        canvas.drawCircle(g.center, radius, cache.spotlightGlow);
+        canvas.drawCircle(g.center, radius, cache.spotlightRing);
       }
       if (codes && matches) {
-        geometry.code.paint(canvas, geometry.codePosition);
+        g.code.paint(canvas, g.codePosition);
         lastPaintedCodeCount++;
       }
     }
@@ -143,9 +150,9 @@ class SeatMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant SeatMapPainter oldDelegate) =>
-      oldDelegate.spotlight != spotlight ||
       oldDelegate.cache != cache ||
       oldDelegate.camera != camera ||
       oldDelegate.mapState != mapState ||
-      oldDelegate.fitScale != fitScale;
+      oldDelegate.fitScale != fitScale ||
+      oldDelegate.spotlight != spotlight;
 }

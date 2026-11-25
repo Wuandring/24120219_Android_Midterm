@@ -7,7 +7,7 @@
 | Trạng thái trực quan | Cách hiển thị | Thao tác |
 | --- | --- | --- |
 | Trống (available) | Màu phân khu, viền sáng | Chạm để chọn nếu khớp bộ lọc |
-| Đang chọn (selected) | Xanh ngọc `#10B981`, viền trắng, dấu ✓ | Chạm lần nữa hoặc xóa trong danh sách vé để bỏ chọn |
+| Đang chọn (selected) | Champagne-gold `#F4D078`, viền trắng, dấu ✓ tối | Chạm lần nữa hoặc xóa trong danh sách vé để bỏ chọn |
 | Đã đặt (booked) | Xám slate, gạch chéo | Chỉ xem thông tin |
 | Đang khóa (locked) | Đỏ sẫm, dấu X | Chỉ xem thông tin |
 
@@ -57,6 +57,7 @@ lib/
 │   └── hit_tester.dart
 ├── state/
 │   ├── camera_controller.dart
+│   ├── framed_viewport.dart
 │   ├── concert_map_controller.dart
 │   ├── seat_map_render_state.dart
 │   └── filter_state.dart
@@ -77,7 +78,7 @@ lib/
 - **Engine:** toán Dart thuần, không import Flutter hoặc dart:ui; có thể unit-test độc lập với UI.
 - **State:** nguồn sự thật duy nhất cho camera, lựa chọn, kiểm tra ghế, focus và bộ lọc. Xuất snapshot bất biến cho painter.
 - **UI Canvas:** nhận gesture tọa độ cục bộ, chuyển sang engine/controller và vẽ bản đồ.
-- **UI Widgets/Screen:** điều khiển lọc, chú thích, danh sách vé; quản lý vòng đời controller/cache/animation. Reset View nằm trong AppBar của screen, không có file map_controls.dart riêng.
+- **UI Widgets/Screen:** điều khiển lọc, chú thích, danh sách vé; quản lý vòng đời controller/cache/animation. Reset View nằm trong HUD nổi của screen, không có file map_controls.dart riêng.
 
 ## 4. Tổ chức dữ liệu và bố cục
 
@@ -87,9 +88,9 @@ Thế giới có kích thước **1600×1200**. MAIN STAGE là hình chữ nhậ
 
 | Khu | Block và lưới hàng × cột | Số ghế | Hình / màu | Giá mô phỏng |
 | --- | --- | ---: | --- | ---: |
-| Standing | ST-L: 4×5; ST-R: 4×5 | 40 | Tròn, cyan `#06B6D4` | 1.800.000 đ |
-| VIP | VP-L: 3×5; VP-C: 3×10; VP-R: 3×5 | 60 | Chữ nhật bo góc có tựa lưng, vàng `#F59E0B` | 3.500.000 đ |
-| Standard | SD-L: 5×6; SD-C: 5×8; SD-R: 5×6 | 100 | Vuông bo góc, indigo `#818CF8` | 1.200.000 đ |
+| Standing | ST-L: 4×5; ST-R: 4×5 | 40 | Tròn, periwinkle lì `#7E7CE0` | 1.800.000 đ |
+| VIP | VP-L: 3×5; VP-C: 3×10; VP-R: 3×5 | 60 | Chữ nhật bo góc có tựa lưng, terracotta lì `#DF7A33` | 3.500.000 đ |
+| Standard | SD-L: 5×6; SD-C: 5×8; SD-R: 5×6 | 100 | Vuông bo góc, teal lì `#3FA8A8` | 1.200.000 đ |
 
 Đánh số từng block theo hàng, từ trái sang phải, bắt đầu 01: `ST-L01..20`, `ST-R01..20`, `VP-L01..15`, `VP-C01..30`, `VP-R01..15`, `SD-L01..30`, `SD-C01..40`, `SD-R01..30`. Nhãn Canvas có hậu tố L/C/R để phân biệt 8 section.
 
@@ -146,19 +147,19 @@ Eligibility dùng chung với controller: ghế không khớp bộ lọc và ch�
 
 Chạm ghế cập nhật snapshot cho painter và Bottom Sheet ngay. Sheet luôn liệt kê toàn bộ lựa chọn, kể cả ghế không khớp bộ lọc. Xóa một dòng cập nhật Canvas và xóa focus nếu cần. Chạm dòng vé tạo animation camera 300ms; mục tiêu y là `(viewportHeight - bottomInset)/2`, trong đó bottomInset là chiều cao sheet tại thời điểm yêu cầu focus. Zoom được clamp trong giới hạn. Sau đó chạy vòng spotlight 1,2 giây và giữ viền ổn định. Tự pan/zoom dừng camera animation và tắt auto-refocus.
 
-Sheet có tay nắm kéo và nút mở/thu; thả tay nắm sẽ snap về đầu gần nhất. Min thông thường 0,14 hoặc đủ 64px điều khiển; max thông thường 0,50 ở dọc và 0,42 ở ngang. Kéo/mở sheet không đổi viewport, zoom hoặc tự kéo camera về ghế focus. Thanh thu gọn ưu tiên số ghế/tổng tiền khi có lựa chọn, chỉ hiện inspection khi không có ghế đã chọn.
+Sheet có tay nắm kéo và nút mở/thu; thả tay nắm sẽ snap về đầu gần nhất. Sheet thu gọn cao khoảng 58px ở dọc, 50px ở ngang; max tương ứng 0,48 và 0,55. Ở ngang, sheet dock bên phải, rộng tối đa 320px, chừa toàn bộ vùng trái/giữa để pinch. Kéo/mở sheet không đổi viewport, zoom hoặc tự kéo camera về ghế focus. Thanh thu gọn ưu tiên số ghế/tổng tiền khi có lựa chọn, chỉ hiện inspection khi không có ghế đã chọn.
 
-FilterState kết hợp zone, trạng thái trực quan và tìm chuỗi con id không phân biệt hoa/thường, bỏ khoảng trắng đầu/cuối. Available không bao gồm Selected. Không có điều kiện: matchingSeatIds = null; không khớp ghế nào: tập rỗng và banner “Không tìm thấy chỗ phù hợp”. Xóa lọc không xóa ticket. Bộ lọc đang hoạt động có viền/tint cyan.
+FilterState kết hợp zone, trạng thái trực quan và tìm chuỗi con id không phân biệt hoa/thường, bỏ khoảng trắng đầu/cuối. Available không bao gồm Selected. Không có điều kiện: matchingSeatIds = null; không khớp ghế nào: tập rỗng và banner “Không tìm thấy chỗ phù hợp”. Xóa lọc không xóa ticket. Bộ lọc đang hoạt động có viền/tint champagne-gold.
 
-**Reset View chỉ animate camera về viewport.fit() trong khoảng 300ms; không xóa query, bộ lọc, lựa chọn, tổng tiền, inspection hay focusedSeatId.** Reset tắt auto-refocus để không bị snap ngược. Legend mở bằng AppBar và đóng khi không dùng. Scaffold đặt resizeToAvoidBottomInset = false; tap Canvas hoặc bắt đầu pan/pinch sẽ unfocus bàn phím để không ép layout hay đổi viewport.
+**Reset View chỉ animate camera về viewport.fit() trong khoảng 300ms; không xóa query, bộ lọc, lựa chọn, tổng tiền, inspection hay focusedSeatId.** Reset tắt auto-refocus để không bị snap ngược. Legend mở bằng HUD và đóng khi không dùng. Scaffold đặt resizeToAvoidBottomInset = false; tap Canvas hoặc bắt đầu pan/pinch sẽ unfocus bàn phím để không ép layout hay đổi viewport.
 
 ## 8. Tối ưu hiệu năng
 
-- `SeatMapPaintCache` chuẩn bị và tái sử dụng Paint, Path, Rect/RRect, shader gradient, vị trí/geometry ghế và TextPainter cho nhãn/mã. Không tạo Paint hoặc TextPainter trong vòng lặp paint(); không dùng blur theo từng frame. TextPainter được dispose khi screen kết thúc.
+- `SeatMapPaintCache` chuẩn bị và tái sử dụng Paint cho từng trạng thái/opacity, Path, Rect/RRect, vị trí/geometry ghế và TextPainter cho nhãn/mã. Không tạo Paint hoặc TextPainter trong vòng lặp paint(); không dùng blur theo từng frame. TextPainter được dispose khi screen kết thúc.
 - **Viewport Culling:** đổi khung nhìn sang World và bỏ qua ghế nằm ngoài cached cullBounds (đã chừa chỗ cho viền/mã/spotlight).
 - **LOD:** chỉ hiện mã ghế khi `scale >= 1.35 * fitScale`; mã dùng font 9.0, letterSpacing = 0 để vừa ô VIP-C rộng 50 world units.
 - Một CustomPainter vẽ toàn bộ bản đồ trong `RepaintBoundary`. `Listenable.merge([camera, mapState, spotlight])` kích hoạt repaint trực tiếp; pan/zoom không cần rebuild screen hoặc danh sách vé. Filter/sheet lắng nghe map state riêng.
-- Spotlight dùng Paint cache và animation số; không tạo Paint/Path/TextPainter mới theo frame. Paint vẫn đọc snapshot và tính một số giá trị/đối tượng nhỏ mỗi frame; không tuyên bố toàn bộ paint() không cấp phát bộ nhớ.
+- Spotlight dùng Paint cache và animation số; không tạo Paint/Path/TextPainter mới theo frame. paint() chỉ đọc snapshot, dùng số vô hướng để culling và các vòng lặp theo chỉ số; không khởi tạo Paint, Path, Shader, RRect, Rect, Offset, Color hoặc TextPainter trong mã paint(). Không dùng neon/blur; chỉ dùng hai shader ánh sáng kiến trúc champagne rất nhẹ, tạo trước trong cache.
 
 Mục tiêu là tương tác mượt; **chưa đo/chứng nhận 60fps trên thiết bị thật**. Widget test và ảnh render không thay thế profile hiệu năng hoặc thử cảm giác gesture trên Android.
 
@@ -217,3 +218,42 @@ Build có cảnh báo Java/Gradle native access (`WARNING: A restricted method i
 Kiểm tra hygiene: `git ls-files --others --exclude-standard` và `git ls-files -ci --exclude-standard` không có output; không có APK/AAB/audit/preview tạm đang được theo dõi. `git check-ignore -v` xác nhận audit, build và ảnh preview bị ignore; icon launcher PNG vẫn được theo dõi. `git diff --check` đạt, chỉ có thông báo chuẩn hóa LF/CRLF trên Windows. M7 chỉ sửa README.md và .gitignore, không đổi mã nguồn hoặc dependency.
 
 Video demo vẫn là placeholder theo yêu cầu. Kết quả tự động trên không xác nhận đã chạy thủ công trên thiết bị thật, cỡ chữ trợ năng hoặc đạt 60fps.
+## 13. Thiết kế matte concert và sửa pinch landscape (25/11/2026)
+
+Thiết kế mới theo brief poster concert: nền charcoal #0D0D0F, 65 chấm champagne-gold cục bộ cố định ở hai mép ngoài; bỏ khung arena bo góc và toàn bộ glow cyan. Sân khấu lục giác vát cạnh màu slate #5C606B có bevel phẳng #7A808E; catwalk mảnh (776..824), B-stage vát cạnh và FOH đều nằm ngoài bounds ghế. Các section có pad charcoal vát 45°, nhãn ivory 19 world units, w700, tracking 2.0 và mức chữ tối thiểu khi fit. Bảng màu hiển thị được quản lý trong ConcertPalette; colorArgb và tất cả dữ liệu nguồn ConcertMockData được giữ nguyên.
+
+Ghế trống không có viền nhựa sáng; VIP giữ tựa lưng chìm. Selected là champagne-gold với viền trắng và check tối, booked chìm xuống nền than, locked dùng burgundy và dấu X đỏ. Ghế chọn không khớp lọc giữ alpha 0,45 và viền đứt vàng. Legend và ticket dùng cùng palette, hairline champagne và swatch màu/hình/ký hiệu tương ứng.
+
+Canvas là Positioned.fill trong Stack toàn màn hình, không AppBar hoặc padding 12px quanh bản đồ/sheet. HUD portrait gồm tiêu đề, search pill và một hàng selector/count; HUD landscape gộp thành một hàng khoảng 46px. Badge dùng 200/200 để không cắt chữ ở 390px. Sheet portrait edge-to-edge; sheet landscape chỉ chiếm góc phải dưới (maxWidth 320), để hai ngón tay thao tác thoải mái ở bên trái/giữa. Bàn phím vẫn không resize Canvas; viewPadding thay vì keyboard-dependent padding giữ framing ổn định.
+
+FramedViewport trong State kế thừa engine ViewportClamper, giữ tọa độ gesture theo toàn Canvas nhưng fit/reset theo phần không bị HUD/sheet che. Với T/B/R là inset trên/dưới/phải:
+
+```text
+fitScale = min((viewportWidth - R)/1600, (viewportHeight - T - B)/1200)
+fit center = ((viewportWidth - R)/2, T + (viewportHeight - T - B)/2)
+```
+
+Portrait dùng B là sheet thu gọn + safe area; landscape dùng R=0 và B là khoảng hở sheet thu gọn 50px + safe area. Bản đồ mặc định căn giữa toàn chiều rộng để hai điểm chạm đối xứng Ctrl+drag của emulator rơi trên Canvas và hàng Standard cuối không bị che. Khi focus, y dùng T + (viewportHeight - T - bottomInset)/2; khi xoay, giữ tỷ lệ zoom và tâm của vùng framing nếu biên cho phép. Kéo sheet không đổi fitScale hay viewport. Reset chỉ đổi camera, giữ nguyên query/filter/ticket/focus.
+
+Tất cả geometry trang trí, mã/nhãn và 8 biến thể Paint cho ghế (4 trạng thái × khớp/không khớp lọc) được tạo trong SeatMapPaintCache. Painter không tạo tài nguyên hình học/vẽ theo frame. Test mới xác nhận deco không giao bounds ghế, đủ 65 stardust dots, đủ 200 ghế nằm trong vùng framing, HUD ngang <=46px và chuỗi gesture hai ngón ở Size(844,390) tăng scale liên tục mà không bị dock/HUD chặn.
+
+**Nhật ký Codex:** thay cache/painter, palette, legend, HUD/search, sheet, camera framing và UI tests. Đã sửa lỗi persistent sheet bị attach hai lần khi Canvas xuất hiện sau frame đầu bằng key ổn định cho dock; thu gọn hitbox icon để HUD thực sự <=46px; cập nhật các test UI theo vị trí overlay mới, palette và inset mới. Không sửa lib/data, lib/engine, test/data, test/engine hoặc dependency. Ảnh kiểm tra nằm trong build/matte-preview-390x844.png và build/matte-preview-844x390.png (được Git ignore). Chưa tuyên bố đã đo 60fps trên thiết bị thật.
+
+Kiểm chứng bản matte: flutter analyze — 0 issues; flutter test — 54/54 passed (gồm 51 test hiện hữu và 3 test mới); flutter build apk --debug — thành công (27.0s). git diff xác nhận Data/Engine, test/data và test/engine cùng pubspec/lock không đổi. Đã kiểm tra ảnh portrait 390×844 và landscape 844×390. Emulator không kết nối tại thời điểm thử cài nên chưa xác nhận chạy bản matte trên thiết bị thật/emulator; có thể mở Pixel 7 rồi chạy flutter run để xem tương tác.
+## 14. Độ tin cậy zoom và chiều sâu kiến trúc 2.5D
+
+CameraController không còn chặn scale theo pointerCount>1: delta luôn lấy scale/lastScale khi hợp lệ. Một ngón pan có ratio=1; recognizer emulator/trackpad báo một pointer nhưng scale thay đổi vẫn zoom. Khung đổi số ngón chỉ rebase focal/scale, các khung tiếp theo tiếp tục zoom; quay scale tích lũy về 1 cũng đảo đúng phần zoom trước đó.
+
+HUD ngang là pill Align(topCenter) ôm nội dung, hai góc trên trả chạm về Canvas. Sheet ngang dock phải, maxWidth=320, dùng DraggableScrollableSheet(expand:false) trong Align(bottomRight), thu gọn về minSize khi vừa xoay sang landscape. Các phần bao trong suốt không nhận hit ngoài card. Vị trí pill zoom lắng nghe extent qua notifier cập nhật sau frame để tránh setState-during-build; kéo sheet không mutate camera.
+
+Hai ngón vẫn là cách zoom chính. Double-tap vùng trống animate 1.8× quanh điểm chạm, hoặc về fit nếu gần maxScale. Double-tap được nhận từ hai empty tap có timestamp/vị trí gần nhau, không trì hoãn tap chọn ghế. Pill +/- bên phải dùng cùng zoomTarget và bounds để animate quanh tâm viewport. PointerScrollEvent zoom quanh localPosition, áp dụng từng delta ngay để không làm mất các sự kiện wheel/trackpad liên tiếp. Các thao tác zoom giữ nguyên ticket/filter/query.
+
+FOH được vẽ tại Rect.fromLTWH(745,782,110,36), tâm nhãn y=800, cách header STANDARD C ở y=850. Tám header dùng font19/w700, #D6D1C4; painter giữ một mức chữ tối thiểu để đọc được ở fit mà không đổi anchor của khu hay tọa độ ghế. Main Stage/Catwalk/B-stage/FOH có mặt đùn xuống 8 world units (#2A2D34) và bóng đất phẳng (#050507). VIP có lip5, Standard lip7 và đường bậc ngang giữa hàng. Hai cone ánh sáng champagne alpha khoảng0.05→0.0 dùng shader linear được tạo sẵn, không neon hoặc blur.
+
+Mọi Path/Paint/Shader/offset cho hiệu ứng trên được tạo trong SeatMapPaintCache. Không đổi hình học Seat, ConcertMockData, phép Screen↔World, HitTester hay mã/test engine. Đây là chiều sâu giả lập bằng lớp vẽ 2D, không xoay/phối cảnh các ghế nên hit-testing cũ vẫn khớp.
+
+**Nhật ký Codex:** bổ sung test scale với một pointer, transition1→2, pinch mô phỏng Ctrl+drag đối xứng quanh tâm844×390, hit-through vùng trên sheet/góc HUD, +/- clamp min/max, double-tap focal/reset, wheel và sheet thu gọn khi xoay. Trong kiểm tra đã sửa external AnimatedBuilder lắng nghe sheet gây setState khi build bằng cập nhật extent sau frame. Kiểm thử no-overlap và hình học hiện hữu tiếp tục chạy cùng suite. Thử FPS/gesture trên thiết bị thật vẫn là kiểm tra thủ công.
+
+Kiểm chứng cuối: `flutter analyze` — `No issues found! (ran in 2.9s)`; `flutter test` — `00:06 +60: All tests passed!`; `flutter build apk --debug` — thành công, `assembleDebug` 18.3s (exit 0). Gradle vẫn có cảnh báo Java native access đã ghi ở M7. Đã xem ảnh render portrait 390×844 và landscape 844×390. `git diff --exit-code` xác nhận Data/Engine, các test tương ứng và pubspec/lock không đổi; không thêm dependency.
+
+Đã cài APK mới lên emulator-5554 (Pixel 7), mở MainActivity và kiểm tra screenshot portrait hiển thị đúng. Pinch đối xứng landscape được xác minh bằng widget test nhiều pointer; chưa kiểm tra thao tác Ctrl+drag thủ công hoặc đo FPS trên thiết bị thật.
