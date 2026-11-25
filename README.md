@@ -1,6 +1,6 @@
 # Interactive Concert Seat Map
 
-Flutter / Dart / Material 3; Android. M1: setup and local data; M2: pure Dart math engine; M3: dark concert canvas renderer; M4: pan, pinch and selection; M5: expandable ticket sheet and spotlight.
+Flutter / Dart / Material 3; Android. M1: setup and local data; M2: pure Dart math engine; M3: dark concert canvas renderer; M4: pan, pinch and selection; M5: expandable ticket sheet and spotlight; M6: filters, legend and camera reset.
 
 ## Run
 
@@ -18,7 +18,7 @@ flutter build apk --debug
 `lib/data/zone_section.dart`: block metadata, grid, color, shape and price.
 `lib/data/concert_mock_data.dart`: immutable lists, world 1600×1200, T-stage, aisles, 8 blocks. Codes are row-major: ST-L/R (20 each), VP-L/C/R (15/30/15), SD-L/C/R (30/40/30). Prices: Standing 1.800.000 đ, VIP 3.500.000 đ, Standard 1.200.000 đ. Status permutation produces exactly 124 available, 52 booked, 24 locked. Selected status belongs to later controller state.
 
-The app displays the 200-seat concert canvas with bounded pan, pinch-to-zoom and persistent tap selection. The ticket sheet supports two-way selection and animated focus; filter controls are a later milestone.
+The app displays the 200-seat concert canvas with bounded pan, pinch-to-zoom and persistent tap selection. The ticket sheet supports two-way selection and animated focus; filter/search controls and camera-only Reset View are available in M6.
 
 ## Manual verification
 
@@ -133,3 +133,31 @@ M5 verification: flutter analyze — 0 issues; flutter test — 38/38 passed; fl
 - 2026-11-25 — M5 fixes: decoupled full-canvas viewport from sheet movement; added bottomInset focus targeting and manual-pan auto-refocus suppression. Added fixed vertical focus clearance, 9.0/zero-spacing seat codes, handle snap on release, capitalized zone names and selection-first summaries. Regression tests cover unchanged camera notifications/viewport during sheet dragging/toggling, manual-view persistence, inset focus, typography and summary priority. SDK-only; no M6 features.
 
 M5 fix verification (2026-11-25): flutter analyze — 0 issues; flutter test — 40/40 passed; flutter build apk --debug — passed. Tests confirm zero camera notifications during sheet dragging/toggling and correct clamped resize after manual pan.
+
+## M6 legend, filters, search and camera reset
+
+`FilterState` combines zone, visual status and trimmed case-insensitive seat-code substring predicates. `ConcertMapController` exposes filters, hasActiveFilters, matchedCount, activeFilterDescription and clearFilters. Matching IDs are null when no condition is active and an immutable empty set for zero matches. Every selection/remove/clear operation recomputes status matches; Available excludes selected seats. Filtering never drops selections, totals, inspection or focus.
+
+Canvas hit-testing uses the same eligibility rule as the controller: dimmed unselected seats cannot be selected; existing dimmed selected seats may still be deselected. The existing painter renders nonmatches at 0.15 alpha and retained selections at 0.40 with dashed emerald outlines. The bottom sheet always shows the complete selected ticket, independent of filters.
+
+`FilterSearchBar` provides code input, quick clear, zone/status popup selectors, match count with filter-description tooltip and Xóa lọc. Narrow layouts use two compact rows; wide layouts use a single horizontally scrollable row. A small map banner offers Xóa bộ lọc for zero matches. The AppBar legend opens a scrollable dark dialog explaining three zone colors/shapes, four states and filtered-seat behavior.
+
+Reset View animates the camera to viewport.fit() over 300ms without publishing any map-state change. It preserves query, filters, selection, totals, focus and inspection, and disables automatic focus recentering. Manual gestures or actual viewport resize cancel the current camera animation. Camera-only repainting remains independent of filter/sheet widget rebuilds.
+
+### M6 manual verification
+
+1. Select seats, then combine a zone, status and mixed-case query such as vp-c. Compare the match count, dimmed seats and retained ticket list.
+2. Tap a dimmed unselected seat: no selection should be added. Deselect an existing dimmed selected seat: only that seat leaves the ticket. Delete from the sheet while filtering Selected: match count updates immediately.
+3. Enter a nonexistent code, check the empty banner and use Xóa bộ lọc. Try the search X button separately: it clears only the query.
+4. Open Bảng chú thích, inspect zone/state explanations, and close it. Rotate in both orientations; controls should scroll horizontally without overflow.
+5. Pan/zoom with selections and filters active, press Reset View and verify that only the camera returns to fit scale. Query, selected IDs and simulated total must stay intact.
+
+Suggested commit: `feat: add concert filters, legend and animated camera reset (M6)`
+
+### AI Usage Log — M6
+
+- 2026-11-25 — Added FilterState, FilterSearchBar, LegendPanel and M6 unit/widget tests; updated map controller, Canvas eligibility, screen and plan. Added combined matching/null-versus-empty semantics, dynamic visual-status filtering, selection-safe dim tap behavior, zero-match clear banner and camera-only animated reset. No third-party packages added. Tests cover matching counts, search normalization, immutable snapshots, selection persistence, blocked dim taps, clear controls, legend, reset preservation and portrait/landscape layout. Physical-device accessibility/text scaling and FPS profiling remain manual checks.
+
+M6 verification: flutter analyze — 0 issues; flutter test — 49/49 passed; flutter build apk --debug — passed. Portrait/landscape widget tests reported no RenderFlex overflow. Gradle native-access warning is non-fatal.
+
+- 2026-11-25 — M6 UX fixes: disabled Scaffold keyboard-driven resizing, dismissed search focus on Canvas tap and pan/pinch start, and added independent cyan tint/border highlights for active zone/status selectors. Widget tests simulate keyboard insets in both orientations, verify stable canvas/camera dimensions, focus dismissal and selector highlight clearing. flutter analyze: 0 issues; flutter test: 51/51 passed.

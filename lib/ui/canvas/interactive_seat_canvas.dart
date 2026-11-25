@@ -35,6 +35,7 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
     behavior: HitTestBehavior.opaque,
     onTapDown: (_) => _gestureConsumed = false,
     onScaleStart: (details) {
+      FocusManager.instance.primaryFocus?.unfocus();
       _gestureConsumed = true;
       widget.onGestureStart?.call();
       widget.camera.startGesture(details.localFocalPoint, details.pointerCount);
@@ -46,6 +47,7 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
     ),
     onScaleEnd: (_) => widget.camera.endGesture(),
     onTapUp: (details) {
+      FocusManager.instance.primaryFocus?.unfocus();
       if (_gestureConsumed || widget.camera.viewport == null) return;
       final seat = HitTester.hitTest(
         seats: ConcertMockData.seats,
@@ -54,6 +56,7 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
           details.localPosition.dy,
         ),
         camera: widget.camera.value,
+        isEligible: widget.mapController.canTapSeat,
       );
       if (seat == null) return;
       if (!widget.mapController.toggleSeat(seat.id)) {
