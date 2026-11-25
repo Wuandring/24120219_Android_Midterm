@@ -1,8 +1,23 @@
-# Interactive Concert Seat Map
+# Sơ đồ chỗ ngồi Concert tương tác
 
-Flutter / Dart / Material 3; Android. M1: setup and local data; M2: pure Dart math engine; M3: dark concert canvas renderer; M4: pan, pinch and selection; M5: expandable ticket sheet and spotlight; M6: filters, legend and camera reset.
+## 1. Mô tả đề tài
 
-## Run
+Ứng dụng Flutter/Dart, Material 3 dành cho Android, hiển thị **200 ghế trong 3 phân khu Standing, VIP và Standard** trên nền concert tối. Sân khấu chữ T, lối đi, nhãn khu và toàn bộ ghế được vẽ bằng **một CustomPainter**. Ghế không phải các Widget riêng lẻ; ứng dụng không dùng InteractiveViewer.
+
+| Trạng thái trực quan | Cách hiển thị | Thao tác |
+| --- | --- | --- |
+| Trống (available) | Màu phân khu, viền sáng | Chạm để chọn nếu khớp bộ lọc |
+| Đang chọn (selected) | Xanh ngọc `#10B981`, viền trắng, dấu ✓ | Chạm lần nữa hoặc xóa trong danh sách vé để bỏ chọn |
+| Đã đặt (booked) | Xám slate, gạch chéo | Chỉ xem thông tin |
+| Đang khóa (locked) | Đỏ sẫm, dấu X | Chỉ xem thông tin |
+
+Dữ liệu hoàn toàn cục bộ và cố định, không có API, cơ sở dữ liệu hoặc thanh toán. Tổng tiền vé là **giá mô phỏng**. Chức năng gồm kéo bản đồ, pinch-to-zoom, chọn ghế, danh sách vé mở rộng, focus/spotlight, chú thích, lọc/tìm kiếm và Reset View. Chỉ khai báo Flutter SDK và flutter_test từ SDK; không thêm package bên thứ ba trực tiếp. Các dependency bắc cầu do SDK cung cấp được khóa trong `pubspec.lock`.
+
+## 2. Hướng dẫn chạy và kiểm thử
+
+Môi trường đã kiểm chứng: Flutter **3.47.9 stable**, Dart **3.13.7**. `pubspec.yaml` yêu cầu Dart `^3.13.7`. Cần Android SDK, JDK tương thích với cấu hình Gradle của dự án và emulator hoặc thiết bị Android bật USB debugging. Có thể dùng `flutter doctor` để kiểm tra môi trường và `flutter devices` để chọn thiết bị.
+
+Chạy tại thư mục gốc dự án:
 
 ```sh
 flutter pub get
@@ -12,152 +27,193 @@ flutter test
 flutter build apk --debug
 ```
 
-## M1 data
+APK debug được tạo tại `build/app/outputs/flutter-apk/app-debug.apk`. Thư mục `build/` không đưa vào Git. Nếu có nhiều thiết bị, chạy `flutter run -d <device-id>`.
 
-`lib/data/seat.dart`: immutable seats, source statuses and pure Dart world geometry.
-`lib/data/zone_section.dart`: block metadata, grid, color, shape and price.
-`lib/data/concert_mock_data.dart`: immutable lists, world 1600×1200, T-stage, aisles, 8 blocks. Codes are row-major: ST-L/R (20 each), VP-L/C/R (15/30/15), SD-L/C/R (30/40/30). Prices: Standing 1.800.000 đ, VIP 3.500.000 đ, Standard 1.200.000 đ. Status permutation produces exactly 124 available, 52 booked, 24 locked. Selected status belongs to later controller state.
+Các nhóm kiểm thử:
 
-The app displays the 200-seat concert canvas with bounded pan, pinch-to-zoom and persistent tap selection. The ticket sheet supports two-way selection and animated focus; filter/search controls and camera-only Reset View are available in M6.
+| Đường dẫn | Nội dung |
+| --- | --- |
+| `test/data/` | Đúng 200 ghế, mã duy nhất, giá/khu, tỷ lệ trạng thái, không giao ghế/sân khấu/lối đi |
+| `test/engine/` | Đổi tọa độ, focal zoom, kẹp biên, hit-test sau pan/zoom và tại biên hình |
+| `test/state/` | Camera, lựa chọn, tổng tiền, focus, bộ lọc, snapshot bất biến |
+| `test/ui/` | Gesture thật trong widget test, đồng bộ hai chiều, sheet dài, focus, xoay màn hình, legend, reset, bàn phím |
+| `test/widget_test.dart` | Khởi động ứng dụng |
 
-## Manual verification
+Để chạy riêng một nhóm: `flutter test test/engine/` hoặc `flutter test test/ui/m6_tools_test.dart`.
 
-1. Run on an Android emulator/device: dark Vietnamese startup screen shows 200 seats.
-2. Rotate the device: text remains visible without overflow.
-3. Run data tests to verify counts, codes, prices and geometry.
+## 3. Kiến trúc mã nguồn
 
-Suggested commit: `feat: scaffold Flutter app and deterministic concert data (M1)`
+```text
+lib/
+├── main.dart
+├── data/
+│   ├── seat.dart
+│   ├── zone_section.dart
+│   └── concert_mock_data.dart
+├── engine/
+│   ├── camera_transform.dart
+│   ├── coordinate_transformer.dart
+│   ├── viewport_clamper.dart
+│   └── hit_tester.dart
+├── state/
+│   ├── camera_controller.dart
+│   ├── concert_map_controller.dart
+│   ├── seat_map_render_state.dart
+│   └── filter_state.dart
+└── ui/
+    ├── canvas/
+    │   ├── seat_map_paint_cache.dart
+    │   ├── seat_map_painter.dart
+    │   └── interactive_seat_canvas.dart
+    ├── widgets/
+    │   ├── seat_bottom_sheet.dart
+    │   ├── filter_search_bar.dart
+    │   └── legend_panel.dart
+    └── screens/
+        └── concert_map_screen.dart
+```
 
-## AI Usage Log
+- **Data:** model bất biến, hình học thế giới và mock layout. Không phụ thuộc Widget.
+- **Engine:** toán Dart thuần, không import Flutter hoặc dart:ui; có thể unit-test độc lập với UI.
+- **State:** nguồn sự thật duy nhất cho camera, lựa chọn, kiểm tra ghế, focus và bộ lọc. Xuất snapshot bất biến cho painter.
+- **UI Canvas:** nhận gesture tọa độ cục bộ, chuyển sang engine/controller và vẽ bản đồ.
+- **UI Widgets/Screen:** điều khiển lọc, chú thích, danh sách vé; quản lý vòng đời controller/cache/animation. Reset View nằm trong AppBar của screen, không có file map_controls.dart riêng.
 
-- 2026-11-24 — M1: generated Android scaffold; edited pubspec, analysis options and main screen; created Seat, ZoneSection, ConcertMockData, data/widget tests and implementation plan. Removed scaffold flutter_lints to keep SDK-only dependencies. No canvas or interaction implemented in this milestone. Verification results are reported in the delivery message.
+## 4. Tổ chức dữ liệu và bố cục
 
-Verification: flutter analyze — 0 issues; flutter test — 4/4 passed; flutter build apk --debug — passed. Android Gradle emitted a Java native-access warning; it did not prevent the build. Manual emulator/device verification remains for the reviewer.
+`Seat` lưu id, sectionId, zone, trạng thái gốc, hình dạng, giá VND nguyên và `WorldRect`. `ZoneSection` mô tả block, số hàng/cột, màu, giá và hình dạng. `ConcertMockData` cung cấp danh sách chỉ đọc, không dùng random hoặc thời gian hệ thống.
 
-## M2 math engine
+Thế giới có kích thước **1600×1200**. MAIN STAGE là hình chữ nhật `(400,70,800,140)`; CATWALK `(740,210,120,310)` nối xuống giữa, tạo sân khấu chữ T. Standing nằm hai bên catwalk; VIP ở giữa; Standard phía dưới. Các hình chữ nhật lối đi chia ngang và dọc giữa các block, không đè lên ghế.
 
-- `lib/engine/camera_transform.dart`: immutable scale/translation, pixel pan and focal zoom. Zoom deltas are incremental; limits are 0.9–4.5 times fitScale.
-- `lib/engine/coordinate_transformer.dart`: `WorldPoint`, world/screen conversion and visible world bounds for later culling. Formula: screen = world × scale + translation; inverse = (screen − translation) / scale.
-- `lib/engine/viewport_clamper.dart`: fit, per-axis clamp, bounded pan/zoom and resize. Small maps center on each axis; large maps keep viewport covered. Resize preserves relative zoom and the previous center world point where boundaries permit.
-- `lib/engine/hit_tester.dart`: converts screen to world, uses circle radius or inclusive rectangle edges. Tiny world-coordinate tolerance covers floating-point roundoff. Returns booked/locked geometry hits for later inspection; optional eligibility predicate supports filtering. It does not modify selections.
+| Khu | Block và lưới hàng × cột | Số ghế | Hình / màu | Giá mô phỏng |
+| --- | --- | ---: | --- | ---: |
+| Standing | ST-L: 4×5; ST-R: 4×5 | 40 | Tròn, cyan `#06B6D4` | 1.800.000 đ |
+| VIP | VP-L: 3×5; VP-C: 3×10; VP-R: 3×5 | 60 | Chữ nhật bo góc có tựa lưng, vàng `#F59E0B` | 3.500.000 đ |
+| Standard | SD-L: 5×6; SD-C: 5×8; SD-R: 5×6 | 100 | Vuông bo góc, indigo `#818CF8` | 1.200.000 đ |
 
-All engine files are pure Dart, with no Flutter/UI imports. Viewport sizes are local canvas pixels. Zero-size layouts must wait until the canvas has a positive size before creating a clamper. Focal zoom preserves the world point under the fingers until boundary clamping requires repositioning.
+Đánh số từng block theo hàng, từ trái sang phải, bắt đầu 01: `ST-L01..20`, `ST-R01..20`, `VP-L01..15`, `VP-C01..30`, `VP-R01..15`, `SD-L01..30`, `SD-C01..40`, `SD-R01..30`. Nhãn Canvas có hậu tố L/C/R để phân biệt 8 section.
 
-### M2 review steps
+Với chỉ số ghế toàn cục i, đặt `bucket = (i * 37 + 11) % 100`: bucket < 62 là available, < 88 là booked, còn lại locked. Hai chu kỳ 100 phần tử tạo đúng **124 ghế trống / 52 đã đặt / 24 khóa**. Selected là lớp trạng thái của controller, không thay đổi trạng thái gốc trong Seat.
 
-1. Run `flutter test test/engine/` for the 15 math/geometry tests.
-2. Run `flutter analyze` and `flutter test` (19 total tests including M1).
-3. Run `flutter run` to confirm the M1 startup screen still works. M2 adds no canvas or gestures; those belong to M3/M4.
+## 5. Chuyển đổi tọa độ, pinch-to-zoom và kẹp biên
 
-Suggested commit: `feat: add pure Dart camera math and hit-testing engine (M2)`
+Gọi s là scale, `(tx,ty)` là translation theo pixel cục bộ Canvas, `(xw,yw)` là điểm World và `(xs,ys)` là điểm Screen:
 
-### AI Usage Log — M2
+```text
+World → Screen: xs = xw * s + tx; ys = yw * s + ty
+Screen → World: xw = (xs - tx) / s; yw = (ys - ty) / s
+fitScale = min(viewportWidth / 1600, viewportHeight / 1200)
+sMin = 0.9 * fitScale; sMax = 4.5 * fitScale
+```
 
-- 2026-11-24 — Created four engine files, `test/engine/math_engine_test.dart` and M2 implementation plan; updated README. Added coordinate round trips, focal zoom limits, axis clamping, resize and hit-test checks for all 200 seats and shape borders. Fixed an import name collision with flutter_test's HitTester by hiding the test-library symbol. No third-party dependency added. `flutter analyze`: 0 issues; `flutter test`: 19/19 passed. APK build result recorded below.
+Pan cộng độ dịch pixel vào translation. Với focal point f và hệ số zoom gia tăng d:
 
+```text
+sNew = clamp(sOld * d, sMin, sMax)
+r = sNew / sOld
+txNew = fx - (fx - txOld) * r
+tyNew = fy - (fy - tyOld) * r
+```
 
-M2 debug APK build: passed (flutter build apk --debug). Gradle emitted a non-fatal Java native-access warning. Device/emulator interaction remains a manual check.
+Công thức giữ nguyên điểm World dưới focal point trước bước kẹp biên. Flutter cung cấp scale tích lũy từ đầu gesture; `CameraController` dùng `d = currentScale / lastScale`. Khi focal point di chuyển, controller cộng delta focal trước rồi zoom quanh focal mới; khi số ngón thay đổi, nó lấy lại mốc focal/scale để tránh nhảy. Dùng onScaleStart/Update/End cho cả pan và pinch; không trộn onPan. Tap sau drag/pinch bị loại.
 
-## M3 canvas renderer
+Kẹp biên từng trục với world start a, world length L, kích thước viewport V, padding pixel p:
 
-`SeatMapPaintCache` owns the T-stage path, arena contour, gradient shader, aisles, static labels, 200 seat shapes, VIP backrests, status symbols, dashed outlines and seat-code TextPainters. Dispose the cache when leaving the screen. `SeatMapPainter` draws the entire venue in one canvas and reads camera/render snapshots through `Listenable.merge`; no per-seat widgets and no Paint/TextPainter allocation in painting loops.
+```text
+Nếu L*s + 2*p <= V: t = (V - L*s)/2 - a*s
+Ngược lại: t = clamp(t, V - (a+L)*s - p, -a*s + p)
+```
 
-Viewport culling uses cached seat bounds including outlines/code space. Seat codes appear only at `scale >= 1.35 * fitScale`. Source booking status remains intact; selected IDs are a rendering overlay for available seats. Filtered seats dim to 0.15 alpha; filtered selections remain at 0.40 with a dashed emerald outline. `ConcertMapScreen` displays the full venue at fit scale and recalculates it on layout changes. M3 adds no gesture or selection behavior.
+Engine mặc định p = 0. Camera dùng padding cố định `width/2` theo x và `0.8*height` theo y để đưa các hàng Standard cuối lên trên sheet mà vẫn giữ một phần bản đồ trong màn hình. Padding không phụ thuộc chiều cao sheet đang kéo; fitScale vẫn tính theo world gốc.
 
-### M3 manual verification
+Viewport gắn với **toàn bộ container Canvas**. Fit chỉ khởi tạo lần đầu; chỉ resize khi width/height thực sự thay đổi. LayoutBuilder chỉ ghi nhận kích thước và lên lịch cập nhật sau frame, không ghi ValueNotifier trong build. Resize giữ tỷ lệ `oldScale/oldFitScale`, giữ tâm World cũ nếu biên cho phép, rồi clamp lại. Nếu đang focus và người dùng chưa tự pan/zoom, screen tính lại focus theo hướng mới.
 
-1. Run `flutter run` on Android. Check the navy arena, cyan T-stage glow, clear aisles and Standing/VIP/Standard blocks.
-2. Check circle Standing seats, VIP backrests and Standard squares; booked seats have a slash, locked seats have an X.
-3. Rotate the device: all 200 seats should remain within the fitted map. Code labels are hidden at fit scale.
-4. Run `flutter test test/ui/seat_map_painter_test.dart`. Tests cover selected/filtered rendering, LOD threshold, culling, notifier repaint and both orientations. Preview PNGs are generated under ignored `build/m3-preview-{fit,zoom}.png`. For readable preview fonts, set `M3_PREVIEW_FONT` to the Flutter SDK's `bin/cache/artifacts/material_fonts/roboto-regular.ttf` before running the test; otherwise Flutter test's box font is expected.
-5. Gesture-driven zoom/selection will be wired in M4. Device frame-rate profiling remains for integration with gestures.
+## 6. Hit-testing và điều kiện chọn ghế
 
-Suggested commit: `feat: render dark concert canvas with cached geometry and LOD (M3)`
+`onTapUp` dùng `details.localPosition`, không dùng tọa độ toàn màn hình. `HitTester` đổi Screen → World trước khi duyệt ghế:
 
-### AI Usage Log — M3
+- Standing: tâm `(cx,cy)`, bán kính `min(width,height)/2`; kiểm tra khoảng cách bình phương <= `(radius + epsilon)^2`.
+- VIP/Standard: kiểm tra cả bốn cạnh hình chữ nhật bao gồm điểm trên biên, theo quy định hit-test của đề. Hình vẽ có góc bo nhưng hit-test dùng Rect bounds.
+- `epsilon = 1e-12 * max(1.0, max(abs(left)+width, abs(top)+height))` chỉ bù sai số số thực, không tạo vùng chạm mở rộng đáng kể.
 
-- 2026-11-24 — Added paint cache, single-canvas painter, fit-view screen and renderer tests; updated main entry, startup test, plan and README. Verified fit/zoom PNGs visually with SDK Roboto. Fixed preview export async handling and explicitly selected Roboto to avoid test placeholder glyphs. No dependencies added; no state/gesture controller implemented. Selected/filtered visual samples are test inputs, not preselected seats in the app.
+Eligibility dùng chung với controller: ghế không khớp bộ lọc và chưa chọn không được chọn mới; ghế đã chọn dù bị làm mờ vẫn có thể bỏ chọn. Ghế booked/locked đủ điều kiện chạm chỉ hiện thông tin/snackbar, không vào ticket. Kiểm thử engine bao gồm tâm của cả 200 ghế sau pan/zoom, đường tròn, góc Rect và điểm trong/ngoài biên ở mức zoom cao.
 
-M3 verification: flutter analyze — 0 issues; flutter test — 25/25 passed; flutter build apk --debug — passed. Fit/zoom previews reviewed visually. Gradle native-access warning is non-fatal; 60fps profiling on device remains for gesture integration.
+## 7. Quản lý trạng thái và đồng bộ hai chiều
 
-## M4 gestures and selection
+`ConcertMapController` là **Single Source of Truth** cho lựa chọn, inspection, focusedSeatId và FilterState. Nó kế thừa ValueNotifier, đồng thời là ChangeNotifier/Listenable. `LinkedHashSet<String>` giữ thứ tự chọn, chống trùng; danh sách Seat, số ghế, tổng giá nguyên và chuỗi VND được suy ra từ tập này. `SeatMapRenderState` giữ selectedSeatIds, matchingSeatIds, focusedSeatId bất biến.
 
-`CameraController` owns camera and viewport. Initial dimensions call fit once; unchanged dimensions do nothing; changed dimensions preserve relative zoom/center via the M2 resize math. `ConcertMapScreen` coalesces layout measurements and applies them in a mounted post-frame callback, never mutating camera notifiers during build.
+`CameraController` kế thừa `ValueNotifier<CameraTransform>`, sở hữu viewport, transform và mốc gesture. Các controller sống suốt vòng đời screen; xoay/rebuild không tạo lại lựa chọn hoặc bộ lọc. Trạng thái nằm trong bộ nhớ, không được lưu qua việc đóng/khởi động lại ứng dụng.
 
-`InteractiveSeatCanvas` handles one-finger pan and two-finger pinch through onScaleStart/Update/End only. The controller computes incremental zoom as current cumulative scale / previous cumulative scale. Finger count changes rebase focal point and scale, avoiding centroid jumps. Translation follows local focal movement; zoom and translation are clamped together. Resize cancels old gesture baselines. Taps use localPosition, convert screen to world and use exact M2 geometry. Drag/pinch suppresses selection.
+Chạm ghế cập nhật snapshot cho painter và Bottom Sheet ngay. Sheet luôn liệt kê toàn bộ lựa chọn, kể cả ghế không khớp bộ lọc. Xóa một dòng cập nhật Canvas và xóa focus nếu cần. Chạm dòng vé tạo animation camera 300ms; mục tiêu y là `(viewportHeight - bottomInset)/2`, trong đó bottomInset là chiều cao sheet tại thời điểm yêu cầu focus. Zoom được clamp trong giới hạn. Sau đó chạy vòng spotlight 1,2 giây và giữ viền ổn định. Tự pan/zoom dừng camera animation và tắt auto-refocus.
 
-`ConcertMapController` stores ordered unique IDs in LinkedHashSet and emits immutable render snapshots from the state layer. Available taps toggle only that seat. Booked/locked seats show a Vietnamese snackbar without changing selection or source status. Controllers live for the screen lifetime, preserving selection on rebuild and rotation. The painter listens directly to camera/map controllers; pan and selection repaint the canvas without rebuilding the screen.
+Sheet có tay nắm kéo và nút mở/thu; thả tay nắm sẽ snap về đầu gần nhất. Min thông thường 0,14 hoặc đủ 64px điều khiển; max thông thường 0,50 ở dọc và 0,42 ở ngang. Kéo/mở sheet không đổi viewport, zoom hoặc tự kéo camera về ghế focus. Thanh thu gọn ưu tiên số ghế/tổng tiền khi có lựa chọn, chỉ hiện inspection khi không có ghế đã chọn.
 
-### M4 manual verification
+FilterState kết hợp zone, trạng thái trực quan và tìm chuỗi con id không phân biệt hoa/thường, bỏ khoảng trắng đầu/cuối. Available không bao gồm Selected. Không có điều kiện: matchingSeatIds = null; không khớp ghế nào: tập rỗng và banner “Không tìm thấy chỗ phù hợp”. Xóa lọc không xóa ticket. Bộ lọc đang hoạt động có viền/tint cyan.
 
-1. Run `flutter run`. Tap two available seats: both become emerald with checkmarks; tap one again: only that seat restores its zone color.
-2. Tap booked/locked seats: feedback appears and existing selections stay intact.
-3. Pinch to zoom, drag, then tap a seat: the visible seat should toggle. Drag far beyond each edge and pinch to both limits: the map remains clamped.
-4. Add/remove a second finger while moving: the camera should not jump to a new focal origin. Finish dragging/pinching: no seat should be accidentally selected.
-5. Rotate while zoomed with seats selected: selection persists and camera adapts to the new viewport; normal rebuilds keep the same view.
+**Reset View chỉ animate camera về viewport.fit() trong khoảng 300ms; không xóa query, bộ lọc, lựa chọn, tổng tiền, inspection hay focusedSeatId.** Reset tắt auto-refocus để không bị snap ngược. Legend mở bằng AppBar và đóng khi không dùng. Scaffold đặt resizeToAvoidBottomInset = false; tap Canvas hoặc bắt đầu pan/pinch sẽ unfocus bàn phím để không ép layout hay đổi viewport.
 
-Suggested commit: `feat: add bounded map gestures and persistent seat selection (M4)`
+## 8. Tối ưu hiệu năng
 
-### AI Usage Log — M4
+- `SeatMapPaintCache` chuẩn bị và tái sử dụng Paint, Path, Rect/RRect, shader gradient, vị trí/geometry ghế và TextPainter cho nhãn/mã. Không tạo Paint hoặc TextPainter trong vòng lặp paint(); không dùng blur theo từng frame. TextPainter được dispose khi screen kết thúc.
+- **Viewport Culling:** đổi khung nhìn sang World và bỏ qua ghế nằm ngoài cached cullBounds (đã chừa chỗ cho viền/mã/spotlight).
+- **LOD:** chỉ hiện mã ghế khi `scale >= 1.35 * fitScale`; mã dùng font 9.0, letterSpacing = 0 để vừa ô VIP-C rộng 50 world units.
+- Một CustomPainter vẽ toàn bộ bản đồ trong `RepaintBoundary`. `Listenable.merge([camera, mapState, spotlight])` kích hoạt repaint trực tiếp; pan/zoom không cần rebuild screen hoặc danh sách vé. Filter/sheet lắng nghe map state riêng.
+- Spotlight dùng Paint cache và animation số; không tạo Paint/Path/TextPainter mới theo frame. Paint vẫn đọc snapshot và tính một số giá trị/đối tượng nhỏ mỗi frame; không tuyên bố toàn bộ paint() không cấp phát bộ nhớ.
 
-- 2026-11-24 — Added CameraController, ConcertMapController, state-layer render snapshot, InteractiveSeatCanvas, controller and gesture widget tests; updated painter, screen, README and plan. Removed build-time camera reset; added post-frame dimension reconciliation, incremental pinch deltas and finger-count rebasing. Tests cover focal anchoring, clamps, local transformed taps, independent selection, blocked seats, same-size rebuilds and rotation persistence. Removed a redundant test import reported by analyzer. No third-party packages added; bottom sheet/filter/reset tools remain later milestones. Physical-device gesture feel and frame-rate profiling remain manual checks.
+Mục tiêu là tương tác mượt; **chưa đo/chứng nhận 60fps trên thiết bị thật**. Widget test và ảnh render không thay thế profile hiệu năng hoặc thử cảm giác gesture trên Android.
 
-M4 verification: flutter analyze — 0 issues; flutter test — 32/32 passed; flutter build apk --debug — passed. Rotation test confirms camera layout notifications run in postFrameCallbacks. Gradle native-access warning is non-fatal.
+## 9. Kiểm tra thủ công trước khi nộp
 
-## M5 expandable tickets and spotlight
+1. Chọn hai ghế trống, bỏ một ghế; thử booked/locked. Đối chiếu số lượng/tổng VND và danh sách vé.
+2. Pan/pinch đến min/max, thêm/bớt ngón trong gesture, tap ghế sau biến đổi và sát biên; không được chọn nhầm khi vừa kéo.
+3. Mở sheet, cuộn danh sách dài, focus hàng Standard cuối, xóa dòng focus. Kéo sheet sau khi tự pan: camera không zoom/snap ngược.
+4. Lọc khu/trạng thái, tìm VP-C hoặc ST-L05; giữ nguyên ticket khi đổi lọc. Thử query không khớp và nút xóa.
+5. Reset khi đang zoom và có lọc/lựa chọn: camera về fit, ticket/query/bộ lọc giữ nguyên. Mở/đóng legend.
+6. Xoay khi sheet mở và ghế focus; mở bàn phím tìm kiếm rồi tap/pan Canvas để ẩn. Kiểm tra không overflow hoặc mất điều khiển. Kiểm tra thêm cỡ chữ trợ năng trên thiết bị.
 
-`ConcertMapController` exposes ordered immutable `selectedSeats`, `selectedCount`, integer `totalPrice`, `formattedTotalPrice`, `removeSeat`, `clearSelection`, inspection and `focusedSeatId`. VND formatting uses SDK-only digit grouping; totals are simulated local mock prices. Canvas toggles and sheet deletes publish the same immutable render snapshot, so source statuses remain unchanged and selections have no duplicates. Removing a focused seat clears its spotlight.
+## 10. Video minh họa
 
-`SeatBottomSheet` is a persistent dark ticket-style `DraggableScrollableSheet` with a drag handle, expand/collapse button and scrollable selected-seat rows. The initial/minimum extent is 0.14 or enough for the 64px controls; maximum extent is 0.50 in portrait and 0.42 in landscape at normal phone sizes. The collapsed bar prioritizes selected count/total whenever seats are selected; otherwise it shows inspection information or an empty hint. Handle release animates to the nearest endpoint; zone names display Standing, VIP and Standard. List rows appear on expansion and show code, zone color, formatted price and delete action.
+**[Chèn link video demo 1–5 phút tại đây]**
 
-The screen updates the full canvas camera viewport post-frame only on initialization or actual resize/rotation. Sheet dragging and toggling never change the viewport, camera transform or fitScale. Explicit focus requests pass the current sheet pixel height as bottomInset, centering at (viewportHeight - bottomInset) / 2. Optional screen-space edge padding in `ViewportClamper` allows edge seats to reach the visible-area center without changing fitScale; unpadded engine behavior stays unchanged. CameraController enables fixed half-width horizontal and 0.8-height vertical clearance, keeping part of the venue onscreen while allowing bottom-row focus above the largest supported sheet. These bounds do not vary during sheet dragging.
+Video nên thể hiện pan/pinch, chọn/bỏ ghế, sheet hai chiều, spotlight, lọc/empty state, Reset View giữ trạng thái và xoay màn hình. Placeholder chưa phải video đã quay.
 
-Tapping a row animates the camera for 300ms to that visible-area center. Focus zoom targets at least 2.4×fitScale and a 1.0 world-to-screen scale where possible, clamped to the valid 0.9–4.5×fitScale range. After centering, a 1.2s pulse runs on cached spotlight Paint objects; a steady ring then remains until focus is removed. Manual map gestures cancel camera animation and disable automatic refocusing. Sheet changes never re-center the camera; rotation adapts the full viewport and only re-centers an explicitly focused seat if manual interaction has not taken control. All eight section headers include L/C/R suffixes. Seat codes use 9.0 world-unit text with explicit zero letter spacing; other labels retain their own spacing.
+## 11. Nhật ký sử dụng AI Agent
 
-### M5 manual verification
+Agent sử dụng ở tất cả các mốc: **Codex**. Người thực hiện review mã, chạy thử trên thiết bị, quay video và commit. Nhật ký dưới đây ghi nhận lỗi/hạn chế thực tế, không coi kết quả sinh mã ban đầu là kết quả đã kiểm chứng.
 
-1. Select several available seats on Canvas. Expand the ticket bar and compare rows, count and simulated VND total. Deselect on Canvas or delete a row: both surfaces update immediately.
-2. Tap a row, including a bottom-most Standard seat. Check the smooth camera transition, readable seat code and pulsing ring above the sheet. Delete the focused row: its selection and ring disappear.
-3. Drag/toggle the sheet, scroll a long list, then rotate with it expanded. Controls should stay visible, the map above should remain interactive, and selections/focus should persist.
-4. Tap a booked/locked seat: inspection appears in the ticket bar without altering selection. Start a pan during focus animation: manual movement takes control.
-5. Run `flutter test test/state/m5_sheet_state_test.dart test/ui/seat_bottom_sheet_test.dart`. Optional `M5_PREVIEW_FONT` may point to SDK `bin/cache/artifacts/material_fonts/roboto-regular.ttf` to export portrait/landscape screenshots under ignored build/ for visual review.
+| Mốc | Nhiệm vụ giao và phần mã sinh/sửa | Lỗi/hạn chế phát hiện, điều chỉnh và cách kiểm tra |
+| --- | --- | --- |
+| M1 | Codex tạo scaffold Android, Seat/ZoneSection/ConcertMockData, main, pubspec, ignore và test dữ liệu. | Scaffold thêm flutter_lints nên đã bỏ để giữ dependency SDK-only. Tên lint unused_local_variable không hợp lệ được loại khỏi cấu hình. Kiểm tra đúng mã/giá, 200 ghế, 124/52/24 và không chồng hình; analyze/test/build. |
+| M2 | Codex sinh CameraTransform, CoordinateTransformer, ViewportClamper, HitTester và test/engine. | HitTester xung đột tên với flutter_test; sửa import bằng hide HitTester. Kiểm tra round-trip, focal-point giữ nguyên kể cả khi chạm giới hạn zoom, clamp, pan/zoom hit-test và biên. |
+| M3 | Codex sinh paint cache, painter, screen và test renderer. | Ảnh test ban đầu dùng font hộp Ahem; sửa xuất ảnh trong runAsync và nạp font SDK để review. Bản screen ban đầu ghi camera.fit() trong LayoutBuilder mỗi rebuild; lỗi này được xác định và sửa ở M4. Kiểm tra 200 ghế, culling, LOD, trạng thái và ảnh fit/zoom. |
+| M4 | Codex sinh CameraController, ConcertMapController, render snapshot, InteractiveSeatCanvas và controller/gesture tests. | Sửa LayoutBuilder ghi đè camera.fit(): fit lần đầu, cập nhật sau frame chỉ khi kích thước thực đổi. Chuyển scale tích lũy thành delta, rebase khi đổi số ngón. Test gesture thật, tọa độ cục bộ, không chọn booked/locked, giữ lựa chọn/camera khi rebuild và xoay. |
+| M5 | Codex thêm SeatBottomSheet, selection totals/remove/clear/focus, animation/spotlight, edge clearance, nhãn 8 section và test sheet/state. | Kéo Bottom Sheet từng làm giật zoom/snap ngược camera vì viewport phụ thuộc chiều cao sheet. Sửa về viewport toàn Canvas, focus nhận bottomInset, pan tay tắt auto-refocus. Font 11 kế thừa letterSpacing 1.8 làm mã VP-C tràn ô; sửa font 9.0/spacing 0. Thêm snap khi thả tay nắm, tên khu đúng chữ hoa và summary ưu tiên ticket. Kiểm tra zero camera notifications khi kéo sheet, tâm focus có inset, giới hạn clamp khi xoay, danh sách 124 ghế và delete hai chiều. |
+| M6 | Codex thêm FilterState, FilterSearchBar, LegendPanel, empty banner, eligibility và camera-only Reset View; sinh unit/widget tests. | Bàn phím ảo có thể đẩy/crush layout; đặt resizeToAvoidBottomInset=false, unfocus khi tap hoặc pan/pinch Canvas. Thêm highlight bộ lọc đang bật. Test keyboard insets dọc/ngang không đổi viewport, lọc không rơi lựa chọn, tap ghế mờ, reset giữ snapshot/query/ticket, đóng/mở legend và không RenderFlex overflow. |
+| M7 | Codex viết lại README tiếng Việt, đối chiếu công thức/kiến trúc với mã thật, bổ sung ignore audit/preview và chạy kiểm chứng cuối. | Giữ nguyên tính năng và dependency. Audit/preview/build là dữ liệu cục bộ được ignore; không xóa bản audit của người dùng. Kết quả tự động được ghi dưới đây sau khi chạy; video, profile FPS và thử thiết bị vẫn cần người thực hiện hoàn tất. |
 
-Suggested commit: `feat: add expandable ticket sheet and animated seat spotlight (M5)`
+## 12. Vệ sinh repository và kết quả kiểm chứng cuối
 
-### AI Usage Log — M5
+Giữ `pubspec.lock`, `.metadata`, nguồn Android, icon launcher, test và tài liệu kế hoạch vì chúng thuộc dự án. Build/cache, cấu hình máy cá nhân, file `*_audit.txt` và ảnh preview tạm được ignore. Hai bản audit cục bộ có thể còn trên máy để tham khảo, không thuộc nội dung commit. Không bỏ qua toàn bộ PNG vì icon Android là tài nguyên nguồn cần thiết.
 
-- 2026-11-24 — Added persistent ticket sheet, M5 state/widget tests and implementation plan; extended map/render state, camera/viewport math, screen, interactive canvas and cached painter. Added ordered seat totals, immutable focus, two-way delete/select sync, visible-area focus animation, cached spotlight pulse, L/C/R labels and orientation-safe extents. Adjusted occupied-seat regression assertion for the new inspection summary; fixed a missing Size import in new tests. Visually reviewed rendered focus states and increased focus/code readability. No dependencies added. Physical-device gesture feel, accessibility text scaling and frame-rate profiling remain manual checks.
+Các lệnh kiểm tra vệ sinh:
 
-M5 verification: flutter analyze — 0 issues; flutter test — 38/38 passed; flutter build apk --debug — passed. Portrait 390×844 and landscape 844×390 focus screenshots reviewed; no RenderFlex overflow in widget tests. Gradle native-access warning is non-fatal.
+```sh
+git status --short
+git ls-files --others --exclude-standard
+git ls-files -ci --exclude-standard
+git diff --check
+```
 
-- 2026-11-25 — M5 fixes: decoupled full-canvas viewport from sheet movement; added bottomInset focus targeting and manual-pan auto-refocus suppression. Added fixed vertical focus clearance, 9.0/zero-spacing seat codes, handle snap on release, capitalized zone names and selection-first summaries. Regression tests cover unchanged camera notifications/viewport during sheet dragging/toggling, manual-view persistence, inset focus, typography and summary priority. SDK-only; no M6 features.
+Kết quả chạy cuối ngày **25/11/2026** trên môi trường nêu ở mục 2:
 
-M5 fix verification (2026-11-25): flutter analyze — 0 issues; flutter test — 40/40 passed; flutter build apk --debug — passed. Tests confirm zero camera notifications during sheet dragging/toggling and correct clamped resize after manual pan.
+| Lệnh | Kết quả thực tế | Exit code |
+| --- | --- | ---: |
+| `flutter analyze` | `No issues found! (ran in 7.6s)` | 0 |
+| `flutter test` | `00:18 +51: All tests passed!` — 51/51 tests đạt | 0 |
+| `flutter build apk --debug` | `Running Gradle task 'assembleDebug'... 11.5s`; `√ Built build\app\outputs\flutter-apk\app-debug.apk` | 0 |
 
-## M6 legend, filters, search and camera reset
+Build có cảnh báo Java/Gradle native access (`WARNING: A restricted method in java.lang.System has been called`), nhưng kết thúc thành công; không thay cấu hình build để che cảnh báo.
 
-`FilterState` combines zone, visual status and trimmed case-insensitive seat-code substring predicates. `ConcertMapController` exposes filters, hasActiveFilters, matchedCount, activeFilterDescription and clearFilters. Matching IDs are null when no condition is active and an immutable empty set for zero matches. Every selection/remove/clear operation recomputes status matches; Available excludes selected seats. Filtering never drops selections, totals, inspection or focus.
+Kiểm tra hygiene: `git ls-files --others --exclude-standard` và `git ls-files -ci --exclude-standard` không có output; không có APK/AAB/audit/preview tạm đang được theo dõi. `git check-ignore -v` xác nhận audit, build và ảnh preview bị ignore; icon launcher PNG vẫn được theo dõi. `git diff --check` đạt, chỉ có thông báo chuẩn hóa LF/CRLF trên Windows. M7 chỉ sửa README.md và .gitignore, không đổi mã nguồn hoặc dependency.
 
-Canvas hit-testing uses the same eligibility rule as the controller: dimmed unselected seats cannot be selected; existing dimmed selected seats may still be deselected. The existing painter renders nonmatches at 0.15 alpha and retained selections at 0.40 with dashed emerald outlines. The bottom sheet always shows the complete selected ticket, independent of filters.
-
-`FilterSearchBar` provides code input, quick clear, zone/status popup selectors, match count with filter-description tooltip and Xóa lọc. Narrow layouts use two compact rows; wide layouts use a single horizontally scrollable row. A small map banner offers Xóa bộ lọc for zero matches. The AppBar legend opens a scrollable dark dialog explaining three zone colors/shapes, four states and filtered-seat behavior.
-
-Reset View animates the camera to viewport.fit() over 300ms without publishing any map-state change. It preserves query, filters, selection, totals, focus and inspection, and disables automatic focus recentering. Manual gestures or actual viewport resize cancel the current camera animation. Camera-only repainting remains independent of filter/sheet widget rebuilds.
-
-### M6 manual verification
-
-1. Select seats, then combine a zone, status and mixed-case query such as vp-c. Compare the match count, dimmed seats and retained ticket list.
-2. Tap a dimmed unselected seat: no selection should be added. Deselect an existing dimmed selected seat: only that seat leaves the ticket. Delete from the sheet while filtering Selected: match count updates immediately.
-3. Enter a nonexistent code, check the empty banner and use Xóa bộ lọc. Try the search X button separately: it clears only the query.
-4. Open Bảng chú thích, inspect zone/state explanations, and close it. Rotate in both orientations; controls should scroll horizontally without overflow.
-5. Pan/zoom with selections and filters active, press Reset View and verify that only the camera returns to fit scale. Query, selected IDs and simulated total must stay intact.
-
-Suggested commit: `feat: add concert filters, legend and animated camera reset (M6)`
-
-### AI Usage Log — M6
-
-- 2026-11-25 — Added FilterState, FilterSearchBar, LegendPanel and M6 unit/widget tests; updated map controller, Canvas eligibility, screen and plan. Added combined matching/null-versus-empty semantics, dynamic visual-status filtering, selection-safe dim tap behavior, zero-match clear banner and camera-only animated reset. No third-party packages added. Tests cover matching counts, search normalization, immutable snapshots, selection persistence, blocked dim taps, clear controls, legend, reset preservation and portrait/landscape layout. Physical-device accessibility/text scaling and FPS profiling remain manual checks.
-
-M6 verification: flutter analyze — 0 issues; flutter test — 49/49 passed; flutter build apk --debug — passed. Portrait/landscape widget tests reported no RenderFlex overflow. Gradle native-access warning is non-fatal.
-
-- 2026-11-25 — M6 UX fixes: disabled Scaffold keyboard-driven resizing, dismissed search focus on Canvas tap and pan/pinch start, and added independent cyan tint/border highlights for active zone/status selectors. Widget tests simulate keyboard insets in both orientations, verify stable canvas/camera dimensions, focus dismissal and selector highlight clearing. flutter analyze: 0 issues; flutter test: 51/51 passed.
+Video demo vẫn là placeholder theo yêu cầu. Kết quả tự động trên không xác nhận đã chạy thủ công trên thiết bị thật, cỡ chữ trợ năng hoặc đạt 60fps.
