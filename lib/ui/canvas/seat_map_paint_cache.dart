@@ -42,9 +42,14 @@ class SeatPaintGeometry {
         dashed.addPath(metric.extractPath(distance, distance + 6), Offset.zero);
       }
     }
-    code = SeatMapPaintCache.text(seat.id, 7.5, const Color(0xFFE2E8F0));
+    code = SeatMapPaintCache.text(
+      seat.id,
+      9.0,
+      const Color(0xFFE2E8F0),
+      letterSpacing: 0,
+    );
     codePosition = Offset(center.dx - code.width / 2, rect.bottom + 3);
-    cullBounds = rect.inflate(15);
+    cullBounds = rect.inflate(20);
   }
   final Seat seat;
   late final Rect rect, cullBounds;
@@ -72,7 +77,7 @@ class SeatMapPaintCache {
       zoneColors[section.id] = Color(section.colorArgb);
       labels.add(
         MapLabel(
-          section.label,
+          '${section.label} ${section.id.split('-').last}',
           section.bounds.centerX,
           section.bounds.top - 20,
           22,
@@ -104,20 +109,24 @@ class SeatMapPaintCache {
       ),
     );
   }
-  static TextPainter text(String value, double size, Color color) =>
-      TextPainter(
-        text: TextSpan(
-          text: value,
-          style: TextStyle(
-            fontFamily: 'Roboto',
-            fontSize: size,
-            color: color,
-            fontWeight: FontWeight.w600,
-            letterSpacing: size > 10 ? 1.8 : 0,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
+  static TextPainter text(
+    String value,
+    double size,
+    Color color, {
+    double letterSpacing = 1.8,
+  }) => TextPainter(
+    text: TextSpan(
+      text: value,
+      style: TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: size,
+        color: color,
+        fontWeight: FontWeight.w600,
+        letterSpacing: letterSpacing,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
 
   late final List<SeatPaintGeometry> seats;
   late final List<Rect> aisles;
@@ -151,6 +160,14 @@ class SeatMapPaintCache {
     ..strokeCap = StrokeCap.round
     ..strokeJoin = StrokeJoin.round;
   final accent = Paint();
+  final spotlightGlow = Paint()
+    ..color = const Color(0x5534D399)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 9;
+  final spotlightRing = Paint()
+    ..color = const Color(0xFFE6FFF5)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2.5;
   void dispose() {
     for (final seat in seats) {
       seat.code.dispose();

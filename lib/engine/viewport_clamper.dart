@@ -10,7 +10,15 @@ class ViewportClamper {
     required this.worldBounds,
     required this.viewportWidth,
     required this.viewportHeight,
+    this.edgePaddingX = 0,
+    this.edgePaddingY = 0,
   }) {
+    if (!edgePaddingX.isFinite ||
+        edgePaddingX < 0 ||
+        !edgePaddingY.isFinite ||
+        edgePaddingY < 0) {
+      throw ArgumentError('Edge clearance must be finite and nonnegative');
+    }
     if (!worldBounds.left.isFinite ||
         !worldBounds.top.isFinite ||
         !worldBounds.right.isFinite ||
@@ -35,6 +43,10 @@ class ViewportClamper {
   final WorldRect worldBounds;
   final double viewportWidth;
   final double viewportHeight;
+
+  /// Optional screen-pixel clearance; fitScale still uses original world bounds.
+  final double edgePaddingX;
+  final double edgePaddingY;
   double get fitScale => math.min(
     viewportWidth / worldBounds.width,
     viewportHeight / worldBounds.height,
@@ -58,6 +70,7 @@ class ViewportClamper {
         worldBounds.width,
         viewportWidth,
         scale,
+        edgePaddingX,
       ),
       ty: _axis(
         camera.ty,
@@ -65,6 +78,7 @@ class ViewportClamper {
         worldBounds.height,
         viewportHeight,
         scale,
+        edgePaddingY,
       ),
     );
   }
@@ -75,12 +89,16 @@ class ViewportClamper {
     double length,
     double viewport,
     double scale,
+    double padding,
   ) {
-    if (length * scale <= viewport) {
+    if (length * scale + 2 * padding <= viewport) {
       return (viewport - length * scale) / 2 - start * scale;
     }
     return translation
-        .clamp(viewport - (start + length) * scale, -start * scale)
+        .clamp(
+          viewport - (start + length) * scale - padding,
+          -start * scale + padding,
+        )
         .toDouble();
   }
 

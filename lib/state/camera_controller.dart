@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import '../data/concert_mock_data.dart';
+import '../data/seat.dart';
+
+import 'dart:math' as math;
+
 import '../engine/camera_transform.dart';
 import '../engine/viewport_clamper.dart';
 
@@ -24,11 +28,37 @@ class CameraController extends ValueNotifier<CameraTransform> {
       worldBounds: ConcertMockData.worldBounds,
       viewportWidth: width,
       viewportHeight: height,
+      edgePaddingX: width / 2,
+      // Fixed clearance supports the sheet's largest supported extent without
+      // changing bounds during sheet drags; part of the venue stays onscreen.
+      edgePaddingY: height * 0.8,
     );
     _viewport = next;
     endGesture();
     value = previous == null ? next.fit() : next.resize(value, previous);
     return true;
+  }
+
+  CameraTransform focusTarget(Seat seat, {double bottomInset = 0}) {
+    final v = _viewport!;
+    if (!bottomInset.isFinite || bottomInset < 0) {
+      throw ArgumentError.value(bottomInset, 'bottomInset');
+    }
+    final visibleHeight = (v.viewportHeight - bottomInset).clamp(
+      0.0,
+      v.viewportHeight,
+    );
+    final scale = math
+        .max(value.scale, math.max(1.0, 2.4 * v.fitScale))
+        .clamp(v.minScale, v.maxScale)
+        .toDouble();
+    return v.clamp(
+      CameraTransform(
+        scale: scale,
+        tx: v.viewportWidth / 2 - seat.bounds.centerX * scale,
+        ty: visibleHeight / 2 - seat.bounds.centerY * scale,
+      ),
+    );
   }
 
   void startGesture(Offset focalPoint, int pointerCount) {

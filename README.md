@@ -1,6 +1,6 @@
 # Interactive Concert Seat Map
 
-Flutter / Dart / Material 3; Android. M1: setup and local data; M2: pure Dart math engine; M3: dark concert canvas renderer; M4: pan, pinch and selection.
+Flutter / Dart / Material 3; Android. M1: setup and local data; M2: pure Dart math engine; M3: dark concert canvas renderer; M4: pan, pinch and selection; M5: expandable ticket sheet and spotlight.
 
 ## Run
 
@@ -18,7 +18,7 @@ flutter build apk --debug
 `lib/data/zone_section.dart`: block metadata, grid, color, shape and price.
 `lib/data/concert_mock_data.dart`: immutable lists, world 1600×1200, T-stage, aisles, 8 blocks. Codes are row-major: ST-L/R (20 each), VP-L/C/R (15/30/15), SD-L/C/R (30/40/30). Prices: Standing 1.800.000 đ, VIP 3.500.000 đ, Standard 1.200.000 đ. Status permutation produces exactly 124 available, 52 booked, 24 locked. Selected status belongs to later controller state.
 
-The app displays the 200-seat concert canvas with bounded pan, pinch-to-zoom and persistent tap selection. Bottom sheet and filter controls are later milestones.
+The app displays the 200-seat concert canvas with bounded pan, pinch-to-zoom and persistent tap selection. The ticket sheet supports two-way selection and animated focus; filter controls are a later milestone.
 
 ## Manual verification
 
@@ -103,3 +103,33 @@ Suggested commit: `feat: add bounded map gestures and persistent seat selection 
 - 2026-11-24 — Added CameraController, ConcertMapController, state-layer render snapshot, InteractiveSeatCanvas, controller and gesture widget tests; updated painter, screen, README and plan. Removed build-time camera reset; added post-frame dimension reconciliation, incremental pinch deltas and finger-count rebasing. Tests cover focal anchoring, clamps, local transformed taps, independent selection, blocked seats, same-size rebuilds and rotation persistence. Removed a redundant test import reported by analyzer. No third-party packages added; bottom sheet/filter/reset tools remain later milestones. Physical-device gesture feel and frame-rate profiling remain manual checks.
 
 M4 verification: flutter analyze — 0 issues; flutter test — 32/32 passed; flutter build apk --debug — passed. Rotation test confirms camera layout notifications run in postFrameCallbacks. Gradle native-access warning is non-fatal.
+
+## M5 expandable tickets and spotlight
+
+`ConcertMapController` exposes ordered immutable `selectedSeats`, `selectedCount`, integer `totalPrice`, `formattedTotalPrice`, `removeSeat`, `clearSelection`, inspection and `focusedSeatId`. VND formatting uses SDK-only digit grouping; totals are simulated local mock prices. Canvas toggles and sheet deletes publish the same immutable render snapshot, so source statuses remain unchanged and selections have no duplicates. Removing a focused seat clears its spotlight.
+
+`SeatBottomSheet` is a persistent dark ticket-style `DraggableScrollableSheet` with a drag handle, expand/collapse button and scrollable selected-seat rows. The initial/minimum extent is 0.14 or enough for the 64px controls; maximum extent is 0.50 in portrait and 0.42 in landscape at normal phone sizes. The collapsed bar prioritizes selected count/total whenever seats are selected; otherwise it shows inspection information or an empty hint. Handle release animates to the nearest endpoint; zone names display Standing, VIP and Standard. List rows appear on expansion and show code, zone color, formatted price and delete action.
+
+The screen updates the full canvas camera viewport post-frame only on initialization or actual resize/rotation. Sheet dragging and toggling never change the viewport, camera transform or fitScale. Explicit focus requests pass the current sheet pixel height as bottomInset, centering at (viewportHeight - bottomInset) / 2. Optional screen-space edge padding in `ViewportClamper` allows edge seats to reach the visible-area center without changing fitScale; unpadded engine behavior stays unchanged. CameraController enables fixed half-width horizontal and 0.8-height vertical clearance, keeping part of the venue onscreen while allowing bottom-row focus above the largest supported sheet. These bounds do not vary during sheet dragging.
+
+Tapping a row animates the camera for 300ms to that visible-area center. Focus zoom targets at least 2.4×fitScale and a 1.0 world-to-screen scale where possible, clamped to the valid 0.9–4.5×fitScale range. After centering, a 1.2s pulse runs on cached spotlight Paint objects; a steady ring then remains until focus is removed. Manual map gestures cancel camera animation and disable automatic refocusing. Sheet changes never re-center the camera; rotation adapts the full viewport and only re-centers an explicitly focused seat if manual interaction has not taken control. All eight section headers include L/C/R suffixes. Seat codes use 9.0 world-unit text with explicit zero letter spacing; other labels retain their own spacing.
+
+### M5 manual verification
+
+1. Select several available seats on Canvas. Expand the ticket bar and compare rows, count and simulated VND total. Deselect on Canvas or delete a row: both surfaces update immediately.
+2. Tap a row, including a bottom-most Standard seat. Check the smooth camera transition, readable seat code and pulsing ring above the sheet. Delete the focused row: its selection and ring disappear.
+3. Drag/toggle the sheet, scroll a long list, then rotate with it expanded. Controls should stay visible, the map above should remain interactive, and selections/focus should persist.
+4. Tap a booked/locked seat: inspection appears in the ticket bar without altering selection. Start a pan during focus animation: manual movement takes control.
+5. Run `flutter test test/state/m5_sheet_state_test.dart test/ui/seat_bottom_sheet_test.dart`. Optional `M5_PREVIEW_FONT` may point to SDK `bin/cache/artifacts/material_fonts/roboto-regular.ttf` to export portrait/landscape screenshots under ignored build/ for visual review.
+
+Suggested commit: `feat: add expandable ticket sheet and animated seat spotlight (M5)`
+
+### AI Usage Log — M5
+
+- 2026-11-24 — Added persistent ticket sheet, M5 state/widget tests and implementation plan; extended map/render state, camera/viewport math, screen, interactive canvas and cached painter. Added ordered seat totals, immutable focus, two-way delete/select sync, visible-area focus animation, cached spotlight pulse, L/C/R labels and orientation-safe extents. Adjusted occupied-seat regression assertion for the new inspection summary; fixed a missing Size import in new tests. Visually reviewed rendered focus states and increased focus/code readability. No dependencies added. Physical-device gesture feel, accessibility text scaling and frame-rate profiling remain manual checks.
+
+M5 verification: flutter analyze — 0 issues; flutter test — 38/38 passed; flutter build apk --debug — passed. Portrait 390×844 and landscape 844×390 focus screenshots reviewed; no RenderFlex overflow in widget tests. Gradle native-access warning is non-fatal.
+
+- 2026-11-25 — M5 fixes: decoupled full-canvas viewport from sheet movement; added bottomInset focus targeting and manual-pan auto-refocus suppression. Added fixed vertical focus clearance, 9.0/zero-spacing seat codes, handle snap on release, capitalized zone names and selection-first summaries. Regression tests cover unchanged camera notifications/viewport during sheet dragging/toggling, manual-view persistence, inset focus, typography and summary priority. SDK-only; no M6 features.
+
+M5 fix verification (2026-11-25): flutter analyze — 0 issues; flutter test — 40/40 passed; flutter build apk --debug — passed. Tests confirm zero camera notifications during sheet dragging/toggling and correct clamped resize after manual pan.

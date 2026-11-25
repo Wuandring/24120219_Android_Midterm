@@ -112,7 +112,13 @@ void main() {
         await t.tapAt(seatPosition(t, seat));
         await t.pump();
         expect(widget.mapController.selectedSeatIds.length, 2);
-        expect(find.textContaining(seat.id), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.textContaining(seat.id),
+          ),
+          findsOneWidget,
+        );
       }
       await pinch(t);
       final before = widget.camera.value;

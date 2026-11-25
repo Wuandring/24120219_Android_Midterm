@@ -15,10 +15,14 @@ class InteractiveSeatCanvas extends StatefulWidget {
     required this.camera,
     required this.mapController,
     required this.cache,
+    this.spotlight = kAlwaysCompleteAnimation,
+    this.onGestureStart,
   });
   final CameraController camera;
   final ConcertMapController mapController;
   final SeatMapPaintCache cache;
+  final Animation<double> spotlight;
+  final VoidCallback? onGestureStart;
   @override
   State<InteractiveSeatCanvas> createState() => _InteractiveSeatCanvasState();
 }
@@ -32,6 +36,7 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
     onTapDown: (_) => _gestureConsumed = false,
     onScaleStart: (details) {
       _gestureConsumed = true;
+      widget.onGestureStart?.call();
       widget.camera.startGesture(details.localFocalPoint, details.pointerCount);
     },
     onScaleUpdate: (details) => widget.camera.updateGesture(
@@ -52,6 +57,7 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
       );
       if (seat == null) return;
       if (!widget.mapController.toggleSeat(seat.id)) {
+        widget.mapController.inspectSeat(seat.id);
         final status = seat.status == SeatStatus.booked
             ? 'đã được đặt'
             : 'đang khóa';
@@ -68,6 +74,7 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
           size: Size.infinite,
           painter: SeatMapPainter(
             cache: widget.cache,
+            spotlight: widget.spotlight,
             camera: widget.camera,
             mapState: widget.mapController,
             fitScale: widget.camera.viewport!.fitScale,

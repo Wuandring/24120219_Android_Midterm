@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -16,11 +18,13 @@ class SeatMapPainter extends CustomPainter {
     required this.camera,
     required this.mapState,
     required this.fitScale,
-  }) : super(repaint: Listenable.merge([camera, mapState]));
+    this.spotlight = kAlwaysCompleteAnimation,
+  }) : super(repaint: Listenable.merge([camera, mapState, spotlight]));
   final SeatMapPaintCache cache;
   final ValueListenable<CameraTransform> camera;
   final ValueListenable<SeatMapRenderState> mapState;
   final double fitScale;
+  final Animation<double> spotlight;
   int lastPaintedSeatCount = 0;
   int lastPaintedCodeCount = 0;
 
@@ -123,6 +127,12 @@ class SeatMapPainter extends CustomPainter {
         cache.border.color = const Color(0xFF10B981).withValues(alpha: 0.4);
         canvas.drawPath(geometry.dashed, cache.border);
       }
+      if (state.focusedSeatId == seat.id) {
+        final radius =
+            geometry.radius + 9 + 3 * math.sin(spotlight.value * math.pi * 6);
+        canvas.drawCircle(geometry.center, radius, cache.spotlightGlow);
+        canvas.drawCircle(geometry.center, radius, cache.spotlightRing);
+      }
       if (codes && matches) {
         geometry.code.paint(canvas, geometry.codePosition);
         lastPaintedCodeCount++;
@@ -133,6 +143,7 @@ class SeatMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant SeatMapPainter oldDelegate) =>
+      oldDelegate.spotlight != spotlight ||
       oldDelegate.cache != cache ||
       oldDelegate.camera != camera ||
       oldDelegate.mapState != mapState ||
