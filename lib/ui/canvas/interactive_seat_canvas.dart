@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 
 import 'dart:math' as math;
 
@@ -37,6 +38,32 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
   Duration _downTime = Duration.zero;
   Duration? _lastEmptyTap;
   Offset? _lastEmptyPosition;
+  @override
+  void initState() {
+    super.initState();
+    widget.mapController.addListener(_syncFocusCache);
+    _syncFocusCache();
+  }
+
+  void _syncFocusCache() =>
+      widget.cache.updateFocusedSeat(widget.mapController.focusedSeatId);
+
+  @override
+  void didUpdateWidget(covariant InteractiveSeatCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.mapController != widget.mapController) {
+      oldWidget.mapController.removeListener(_syncFocusCache);
+      widget.mapController.addListener(_syncFocusCache);
+    }
+    _syncFocusCache();
+  }
+
+  @override
+  void dispose() {
+    widget.mapController.removeListener(_syncFocusCache);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => Listener(
     onPointerDown: (event) => _downTime = event.timeStamp,
@@ -115,6 +142,7 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
         }
         _lastEmptyTap = null;
         if (!widget.mapController.toggleSeat(seat.id)) {
+          HapticFeedback.lightImpact();
           widget.mapController.inspectSeat(seat.id);
           final status = seat.status == SeatStatus.booked
               ? 'đã được đặt'
@@ -122,6 +150,8 @@ class _InteractiveSeatCanvasState extends State<InteractiveSeatCanvas> {
           ScaffoldMessenger.maybeOf(context)
             ?..hideCurrentSnackBar()
             ..showSnackBar(SnackBar(content: Text('${seat.id}: ghế $status.')));
+        } else {
+          HapticFeedback.selectionClick();
         }
       },
       child: RepaintBoundary(

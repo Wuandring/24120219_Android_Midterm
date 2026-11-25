@@ -145,6 +145,24 @@ class SeatMapPainter extends CustomPainter {
         lastPaintedCodeCount++;
       }
     }
+    if (state.focusedSeatId != null &&
+        state.selectedSeatIds.contains(state.focusedSeatId) &&
+        cache.focusedSeatId == state.focusedSeatId) {
+      cache.sightlineInk.strokeWidth = 1.5 / c.scale;
+      canvas.drawPath(cache.sightline, cache.sightlineInk);
+      canvas.save();
+      canvas.translate(
+        cache.sightlineTagAnchor.dx,
+        cache.sightlineTagAnchor.dy,
+      );
+      // Keep the distance tag readable in screen pixels at any map zoom.
+      canvas.scale(1 / c.scale);
+      canvas.translate(0, -38);
+      canvas.drawRRect(cache.sightlineTag, cache.sightlineTagInk);
+      canvas.drawRRect(cache.sightlineTag, cache.sightlineTagBorder);
+      cache.sightlineText.paint(canvas, cache.sightlineTextPosition);
+      canvas.restore();
+    }
     canvas.restore();
   }
 

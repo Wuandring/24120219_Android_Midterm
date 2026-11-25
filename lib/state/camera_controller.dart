@@ -7,6 +7,7 @@ import '../data/seat.dart';
 import 'dart:math' as math;
 
 import '../engine/camera_transform.dart';
+import '../engine/coordinate_transformer.dart';
 import '../engine/viewport_clamper.dart';
 import 'framed_viewport.dart';
 
@@ -89,6 +90,18 @@ class CameraController extends ValueNotifier<CameraTransform> {
       scaleDelta: factor,
       focalX: focalPoint.dx,
       focalY: focalPoint.dy,
+    );
+  }
+
+  CameraTransform centerTarget(WorldPoint point) {
+    final v = _viewport;
+    if (v == null) return value;
+    return v.clamp(
+      CameraTransform(
+        scale: value.scale,
+        tx: v.viewportWidth / 2 - point.x * value.scale,
+        ty: v.viewportHeight / 2 - point.y * value.scale,
+      ),
     );
   }
 

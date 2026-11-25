@@ -1,13 +1,17 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/seat.dart';
 import '../../engine/camera_transform.dart';
+import '../../engine/coordinate_transformer.dart';
 import '../../state/camera_controller.dart';
 import '../../state/concert_map_controller.dart';
 import '../canvas/interactive_seat_canvas.dart';
 import '../canvas/seat_map_paint_cache.dart';
+import '../canvas/seat_map_minimap.dart';
+import '../widgets/camera_zoom_controls.dart';
 import '../widgets/seat_bottom_sheet.dart';
 import '../widgets/filter_search_bar.dart';
 import '../widgets/legend_panel.dart';
@@ -76,9 +80,7 @@ class _ConcertMapScreenState extends State<ConcertMapScreen>
       _pendingSize != null && _pendingSize!.width > _pendingSize!.height;
   EdgeInsets _safe = EdgeInsets.zero;
   double get _topInset => _safe.top + (_landscape ? 46 : 126) + 16;
-  double _minFraction(Size size) =>
-      ((size.width > size.height ? 50 : 58) / (size.height - _safe.bottom))
-          .clamp(0.05, 0.60);
+  double _minFraction(Size size) => (68 / size.height).clamp(0.07, 0.24);
   double _maxFraction(Size size) =>
       math.max(_minFraction(size), size.width > size.height ? 0.55 : 0.48);
   void _scheduleReconcile() {
@@ -101,7 +103,7 @@ class _ConcertMapScreenState extends State<ConcertMapScreen>
         size.width,
         size.height,
         topInset: _topInset,
-        bottomInset: _landscape ? _safe.bottom + 50 + 8 : _safe.bottom + 58 + 8,
+        bottomInset: _safe.bottom + (size.height - _safe.bottom) * min + 8,
         rightInset: 0,
       )) {
         _focusAnimation.stop();
@@ -159,6 +161,7 @@ class _ConcertMapScreenState extends State<ConcertMapScreen>
   }
 
   void _resetView() {
+    HapticFeedback.selectionClick();
     final viewport = _camera.viewport;
     if (viewport == null) return;
     _camera.endGesture();
@@ -193,6 +196,21 @@ class _ConcertMapScreenState extends State<ConcertMapScreen>
     } else {
       _zoomBy(1.8, focal);
     }
+  }
+
+  void _navigateMinimap(WorldPoint point, {bool animate = true}) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _manualGestureStart();
+    _camera.endGesture();
+    final target = _camera.centerTarget(point);
+    if (!animate) {
+      _camera.value = target;
+      return;
+    }
+    _resetting = true;
+    _from = _camera.value;
+    _to = target;
+    _focusAnimation.forward(from: 0);
   }
 
   @override
@@ -359,6 +377,47 @@ class _ConcertMapScreenState extends State<ConcertMapScreen>
                       ),
               ),
             ),
+            ValueListenableBuilder<double>(
+              valueListenable: _sheetFraction,
+              child: AnimatedBuilder(
+                animation: _camera,
+                child: SeatMapMinimap(
+                  camera: _camera,
+                  mapController: _mapController,
+                  cache: _cache,
+                  onNavigate: (point) => _navigateMinimap(point),
+                  onDrag: (point) => _navigateMinimap(point, animate: false),
+                ),
+                builder: (context, child) {
+                  final visible =
+                      _camera.viewport != null &&
+                      _camera.value.scale > 1.35 * _camera.viewport!.fitScale;
+                  return IgnorePointer(
+                    ignoring: !visible,
+                    child: AnimatedOpacity(
+                      key: const ValueKey('minimap-visibility'),
+                      opacity: visible ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: child,
+                    ),
+                  );
+                },
+              ),
+              builder: (context, fraction, child) => Positioned(
+                left: 12,
+                bottom:
+                    safe.bottom +
+                    (size.height - safe.bottom) *
+                        (fraction > 0
+                            ? fraction.clamp(
+                                _minFraction(size),
+                                _maxFraction(size),
+                              )
+                            : _minFraction(size)) +
+                    10,
+                child: child!,
+              ),
+            ),
             Positioned(
               key: const ValueKey('ticket-dock'),
               right: 0,
@@ -391,42 +450,16 @@ class _ConcertMapScreenState extends State<ConcertMapScreen>
                 return Positioned(
                   right: 8,
                   bottom: bottom,
-                  child: Material(
-                    color: ConcertPalette.surface,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(
-                        color: Color(0xFF3A3326),
-                        width: 0.7,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          key: const ValueKey('zoom-in'),
-                          tooltip: 'Phóng to',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(
-                            Icons.add,
-                            size: 20,
-                            color: ConcertPalette.gold,
-                          ),
-                          onPressed: () => _zoomBy(1.25),
-                        ),
-                        IconButton(
-                          key: const ValueKey('zoom-out'),
-                          tooltip: 'Thu nhỏ',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(
-                            Icons.remove,
-                            size: 20,
-                            color: ConcertPalette.gold,
-                          ),
-                          onPressed: () => _zoomBy(1 / 1.25),
-                        ),
-                      ],
-                    ),
+                  child: CameraZoomControls(
+                    camera: _camera,
+                    onZoomIn: () {
+                      HapticFeedback.selectionClick();
+                      _zoomBy(1.25);
+                    },
+                    onZoomOut: () {
+                      HapticFeedback.selectionClick();
+                      _zoomBy(1 / 1.25);
+                    },
                   ),
                 );
               },

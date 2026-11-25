@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/seat.dart';
 import '../../state/concert_map_controller.dart';
@@ -111,6 +112,39 @@ class SeatBottomSheet extends StatelessWidget {
                               builder: (context, _) {
                                 final expanded =
                                     sheetController.isAttached &&
+                                    sheetController.size > minSize + 0.015;
+                                return expanded && seats.length >= 2
+                                    ? TextButton(
+                                        key: const ValueKey(
+                                          'clear-ticket-selection',
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(
+                                            0xFFE5C67E,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                          ),
+                                          minimumSize: const Size(0, 32),
+                                          textStyle: const TextStyle(
+                                            fontSize: 11,
+                                            fontFamily: 'Roboto',
+                                          ),
+                                        ),
+                                        onPressed: () {
+                                          HapticFeedback.selectionClick();
+                                          mapController.clearSelection();
+                                        },
+                                        child: const Text('Xóa tất cả'),
+                                      )
+                                    : const SizedBox.shrink();
+                              },
+                            ),
+                            AnimatedBuilder(
+                              animation: sheetController,
+                              builder: (context, _) {
+                                final expanded =
+                                    sheetController.isAttached &&
                                     sheetController.size >
                                         (minSize + maxSize) / 2;
                                 return IconButton(
@@ -144,10 +178,14 @@ class SeatBottomSheet extends StatelessWidget {
                   builder: (context, child) {
                     final collapsed =
                         !sheetController.isAttached ||
-                        sheetController.size <= minSize + 0.01;
+                        sheetController.size <= minSize + 0.015;
                     return IgnorePointer(
                       ignoring: collapsed,
-                      child: Opacity(opacity: collapsed ? 0 : 1, child: child),
+                      child: Opacity(
+                        key: const ValueKey('ticket-list-visibility'),
+                        opacity: collapsed ? 0 : 1,
+                        child: child,
+                      ),
                     );
                   },
                   child: ListView.builder(
@@ -200,7 +238,10 @@ class SeatBottomSheet extends StatelessWidget {
                           key: ValueKey('delete-${seat.id}'),
                           tooltip: 'Bỏ ghế ${seat.id}',
                           icon: const Icon(Icons.close),
-                          onPressed: () => mapController.removeSeat(seat.id),
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            mapController.removeSeat(seat.id);
+                          },
                         ),
                       );
                     },

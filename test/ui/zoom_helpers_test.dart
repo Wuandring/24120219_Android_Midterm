@@ -97,7 +97,8 @@ void main() {
     (t) async {
       await open(t);
       final c = canvas(t).camera;
-      const focal = Offset(70, 240);
+      // Keep this empty Canvas point outside the now-interactive minimap.
+      const focal = Offset(70, 170);
       final world = CoordinateTransformer.screenToWorld(
         WorldPoint(focal.dx, focal.dy),
         c.value,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dart:math' as math;
+
 import 'dart:ui' as ui;
 
 import '../../data/concert_mock_data.dart';
@@ -336,7 +338,81 @@ class SeatMapPaintCache {
     ..color = const Color(0xFFF4D078)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
+
+  final sightline = Path();
+  final sightlineInk = Paint()
+    ..color = const Color(0x8CE5C67E)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  final sightlineTagInk = Paint()..color = const Color(0xF5141417);
+  final sightlineTagBorder = Paint()
+    ..color = const Color(0x73C9A96E)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.7;
+  final sightlineText = text('', 11, const Color(0xFFE5C67E), letterSpacing: 0);
+  String? _focusedSeatId;
+  String? get focusedSeatId => _focusedSeatId;
+  Offset sightlineTagAnchor = Offset.zero;
+  Offset sightlineTextPosition = Offset.zero;
+  RRect sightlineTag = RRect.zero;
+
+  /// Runs on state changes, never in paint or camera animation callbacks.
+  /// The same Path and TextPainter survive every focus/zoom frame.
+  void updateFocusedSeat(String? id) {
+    if (_focusedSeatId == id) return;
+    _focusedSeatId = id;
+    sightline.reset();
+    if (id == null) return;
+    final seat = seats.firstWhere((g) => g.seat.id == id);
+    final dx = 800 - seat.center.dx, dy = 140 - seat.center.dy;
+    final length = math.sqrt(dx * dx + dy * dy);
+    if (length > 0) {
+      for (double d = 0; d < length; d += 18) {
+        final end = math.min(d + 10, length);
+        sightline
+          ..moveTo(
+            seat.center.dx + dx * d / length,
+            seat.center.dy + dy * d / length,
+          )
+          ..lineTo(
+            seat.center.dx + dx * end / length,
+            seat.center.dy + dy * end / length,
+          );
+      }
+    }
+    final angle = math.atan2(dx.abs(), -dy) * 180 / math.pi;
+    final direction = angle <= 15
+        ? 'Chính diện'
+        : seat.center.dx < 800
+        ? 'Cánh trái'
+        : 'Cánh phải';
+    sightlineText.text = TextSpan(
+      text: '${(length * 0.04).round()}m • $direction',
+      style: const TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFFE5C67E),
+      ),
+    );
+    sightlineText.layout();
+    sightlineTagAnchor = seat.center;
+    sightlineTextPosition = Offset(
+      -sightlineText.width / 2,
+      -sightlineText.height / 2,
+    );
+    sightlineTag = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: sightlineText.width + 16,
+        height: sightlineText.height + 10,
+      ),
+      const Radius.circular(8),
+    );
+  }
+
   void dispose() {
+    sightlineText.dispose();
     for (final s in seats) {
       s.code.dispose();
     }
